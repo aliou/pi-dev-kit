@@ -246,7 +246,34 @@ export const configLoader = new ConfigLoader<
 >("my-extension", DEFAULTS);
 ```
 
+`ConfigLoader` comes from `@aliou/pi-utils-settings`, a standalone published package (source: `~/code/src/github.com/aliou/pi-extensions/packages/settings/`). It is listed as a regular dependency in `package.json`, not a peer dependency.
+
 The name passed to `ConfigLoader` determines the filename: `"my-extension"` → `~/.pi/agent/extensions/my-extension.json`.
+
+### Reading config
+
+After calling `load()`, use `getConfig()` for the resolved config (defaults merged in) or `getRawConfig(scope)` for the raw config at a specific scope.
+
+```typescript
+await configLoader.load();
+const config = configLoader.getConfig();        // ResolvedMyExtensionConfig
+const raw = configLoader.getRawConfig("global"); // MyExtensionConfig | null
+```
+
+### Saving config
+
+Use `save(scope, config)` to persist changes. The scope must be one of the enabled scopes (`"global"`, `"local"`, or `"memory"`). After saving, the loader automatically reloads and re-merges.
+
+```typescript
+await configLoader.save("global", { myOption: "new-value" });
+// configLoader.getConfig() now reflects the saved change
+```
+
+Memory scope is ephemeral -- it resets on reload and is not written to disk.
+
+### Scopes and merge order
+
+Default scopes are `["global", "local"]`. Merge priority (lowest to highest): defaults -> global -> local -> memory. Only overrides are stored to disk; missing fields fall back to defaults.
 
 For extensions with migrations or multi-scope config (global + local + in-memory), pass an options object:
 

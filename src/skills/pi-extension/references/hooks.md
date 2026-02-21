@@ -128,16 +128,23 @@ pi.on("user_bash", async (event, ctx) => {
 
 ## before_agent_start
 
-This event fires before each agent turn. It is commonly used to modify the system prompt:
+This event fires before each agent turn. It is commonly used to modify the system prompt.
+
+The handler receives a `BeforeAgentStartEvent` with a `systemPrompt` field containing the current prompt. Return a `{ systemPrompt }` object to replace it. If multiple extensions return a modified prompt, they are chained.
 
 ```typescript
-pi.on("before_agent_start", async (_event, ctx) => {
-  const existingPrompt = ctx.getSystemPrompt();
-  ctx.setSystemPrompt(existingPrompt + "\n\nAlways respond as a pirate.");
+pi.on("before_agent_start", async (event) => {
+  return {
+    systemPrompt: event.systemPrompt + "\n\nAlways respond as a pirate.",
+  };
 });
 ```
 
+Return `undefined` to leave the prompt unchanged.
+
 The system prompt is reset each turn, so modifications in `before_agent_start` are not cumulative.
+
+To access flags inside hooks, use `pi.getFlag()` (see `references/additional-apis.md`).
 
 ## Bash Spawn Hook (Command Rewriting)
 
