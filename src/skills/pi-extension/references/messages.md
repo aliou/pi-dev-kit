@@ -74,10 +74,11 @@ pi.registerCommand("results", {
       return;
     }
 
-    const result = await ctx.ui.custom<void>((tui, theme, _kb, done) => {
-      return new ResultsDisplay(theme, items, () => done(undefined));
+    const result = await ctx.ui.custom<"closed">((tui, theme, _kb, done) => {
+      return new ResultsDisplay(theme, items, () => done("closed"));
     });
 
+    // RPC fallback only: custom() returns undefined in RPC/Print.
     if (result === undefined) {
       pi.sendMessage({
         customType: "my-results",

@@ -31,7 +31,7 @@ pnpm typecheck
 - [ ] Custom renderers display correctly (both partial and final states).
 - [ ] Missing API key shows a notification, not a crash.
 - [ ] Works in Print mode (`pi -p "test message"`): no UI errors, graceful degradation.
-- [ ] If using `ctx.ui.custom()`: RPC fallback is exercised (custom returns undefined).
+- [ ] If using `ctx.ui.custom()`: RPC fallback is exercised (`custom()` returns undefined in RPC), and interactive close paths use explicit non-undefined sentinels (no accidental `done(undefined)` ambiguity).
 
 ## Testing Hooks
 

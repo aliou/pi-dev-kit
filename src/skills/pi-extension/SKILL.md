@@ -39,7 +39,8 @@ import { truncateHead, highlightCode, getLanguageFromPath, DynamicBorder, Border
 5. If the extension displays rich UI: Read `references/components.md` for TUI components and `references/messages.md` for message display patterns.
 6. If the extension tracks state: Read `references/state.md`.
 7. For less common APIs: Read `references/additional-apis.md`.
-8. Before publishing: Read `references/publish.md` and `references/documentation.md`.
+8. If the extension adds a tool that competes with a natural bash fallback (process managers, CI watchers, search tools): inject system prompt guidance. Read the **Guidance Injection Pattern** section in `references/additional-apis.md`.
+9. Before publishing: Read `references/publish.md` and `references/documentation.md`.
 
 ### Modifying an Existing Extension
 
@@ -61,7 +62,7 @@ import { truncateHead, highlightCode, getLanguageFromPath, DynamicBorder, Border
 | `references/modes.md` | Mode behavior matrix, ctx.hasUI, dialog vs fire-and-forget, three-tier pattern |
 | `references/messages.md` | sendMessage, registerMessageRenderer, notify, when to use each |
 | `references/state.md` | appendEntry, state reconstruction, appendEntry vs sendMessage |
-| `references/additional-apis.md` | Shortcuts, flags, exec, sendUserMessage, session name, labels, model control, EventBus, theme, UI customization |
+| `references/additional-apis.md` | Shortcuts, flags, exec, sendUserMessage, session name, labels, model control, EventBus, theme, UI customization, system prompt guidance injection |
 | `references/publish.md` | npm publishing, changesets (manual file format + CI automation), GitHub Actions publish workflow, first-time setup, NPM_TOKEN, pre-publish checklist |
 | `references/testing.md` | Local development, type checking, manual testing, debugging |
 | `references/documentation.md` | README template, what to document, changelog |
@@ -71,8 +72,9 @@ import { truncateHead, highlightCode, getLanguageFromPath, DynamicBorder, Border
 When implementing, look at these existing extensions for patterns:
 
 **Standalone repos (recommended structure):**
-- `pi-linkup` (`/Users/alioudiallo/code/src/github.com/aliou/pi-linkup/`): Tools wrapping a third-party API. Has tools, a command, custom message rendering, API key gating.
+- `pi-linkup` (`/Users/alioudiallo/code/src/github.com/aliou/pi-linkup/`): Tools wrapping a third-party API. Has tools, a command, custom message rendering, API key gating, system prompt guidance injection (`src/guidance.ts` + `src/hooks/system-prompt.ts`).
 - `pi-synthetic` (`/Users/alioudiallo/code/src/github.com/aliou/pi-synthetic/`): Provider + tools. Has a provider with models, a command with `custom()` component, API key gating, async entry point.
+- `pi-processes` (`/Users/alioudiallo/code/src/github.com/aliou/pi-processes/`): Multi-action tool with system prompt guidance injection (`src/guidance.ts` + `src/hooks/system-prompt.ts`), config toggle, background blocker hook.
 
 **Monorepo extensions (simpler structure):**
 - `extensions/defaults/` in this repo: Simple tool registration (get_current_time).
@@ -85,7 +87,7 @@ When implementing, look at these existing extensions for patterns:
 1. **Execute parameter order**: `(toolCallId, params, signal, onUpdate, ctx)`. Signal before onUpdate.
 2. **Always use `onUpdate?.()`**: Optional chaining. The parameter can be `undefined`.
 3. **No `.js` in imports**: Use bare module paths (`./tools/my-tool`, not `./tools/my-tool.js`).
-4. **Mode awareness**: Every `ctx.ui.custom()` call needs an RPC fallback (use `select`/`confirm`/`notify` -- they work in RPC). Every `tool_call` hook with dialogs needs a `ctx.hasUI` check.
+4. **Mode awareness**: Every `ctx.ui.custom()` call needs an RPC fallback (use `select`/`confirm`/`notify` -- they work in RPC). Do not use `done(undefined)` for normal interactive close paths when you detect fallback with `result === undefined`; use explicit sentinels (`null`, `"closed"`, boolean). Every `tool_call` hook with dialogs needs a `ctx.hasUI` check.
 5. **API key gating**: Check before registering tools that require the key. Providers handle missing keys internally via their `models()` function.
 6. **Tool naming**: Prefix with API name for third-party integrations (`linkup_web_search`). No prefix for internal tools (`get_current_time`).
 7. **Tool call header pattern**: Keep `renderCall` consistent: first line `[Tool Name]: [Action] [Main arg] [Option args]`, extra lines for long args. Use display names, not raw tool IDs.
@@ -109,7 +111,7 @@ Before considering an extension complete:
 - [ ] `renderCall` uses a consistent first-line pattern (tool, action if any, main arg, options).
 - [ ] Long call arguments are moved to follow-up lines, not crammed into first line.
 - [ ] If result includes a footer, there is a blank line above it.
-- [ ] `ctx.ui.custom()` calls have RPC fallback (undefined check).
+- [ ] `ctx.ui.custom()` calls have RPC fallback, and interactive close/cancel paths do not rely on `done(undefined)` when fallback detection uses `result === undefined`.
 - [ ] `tool_call` hooks check `ctx.hasUI` before dialog methods.
 - [ ] Fire-and-forget methods (notify, setStatus, etc.) are used without hasUI guards.
 - [ ] `signal` is forwarded to all async operations (fetch, child processes, API clients). No unused `_signal`.
@@ -122,3 +124,4 @@ Before considering an extension complete:
 - [ ] `prepare` script is `"[ -d .git ] && husky || true"`, not bare `"husky"`.
 - [ ] `config.ts` uses `ConfigLoader<Raw, Resolved>` with TypeScript interfaces, not TypeBox schemas.
 - [ ] If deviating from the standard entry point pattern (load-config → check-enabled → register), the reason is documented in `AGENTS.md`.
+- [ ] If the extension adds a tool that competes with a bash fallback: guidance is injected via `src/guidance.ts` + `src/hooks/system-prompt.ts`, with a `systemPromptGuidance` config toggle defaulting to `true`.

@@ -18,7 +18,7 @@ pi.registerCommand("my-command", {
 
 The `ctx` parameter provides the same `ExtensionContext` as hooks, with access to `ctx.ui`, `ctx.hasUI`, `ctx.cwd`, etc.
 
-Commands are interactive by nature (the user typed them), so `ctx.hasUI` is almost always `true`. However, commands can also be invoked programmatically (e.g., via RPC), so the three-tier pattern still applies.
+Commands are interactive by nature (the user typed them), so `ctx.hasUI` is usually `true`. However, commands can also be invoked programmatically (for example via RPC), so the three-tier pattern still applies.
 
 ## Simple Command
 
@@ -48,18 +48,21 @@ pi.registerCommand("quotas", {
       return;
     }
 
-    // Interactive mode: full TUI component
-    const result = await ctx.ui.custom<void>((tui, theme, _kb, done) => {
-      return new QuotasDisplay(theme, quotas, () => done(undefined));
+    // Interactive mode: full TUI component.
+    // Use explicit sentinel value for close/cancel, not undefined.
+    const result = await ctx.ui.custom<"closed">((tui, theme, _kb, done) => {
+      return new QuotasDisplay(theme, quotas, () => done("closed"));
     });
 
-    // RPC mode: custom() returned undefined, fall back to dialog methods
+    // RPC mode: custom() returns undefined by design.
     if (result === undefined) {
       ctx.ui.notify(formatQuotasPlain(quotas), "info");
     }
   },
 });
 ```
+
+Do not use `done(undefined)` in normal interactive close paths if you rely on `result === undefined` to detect RPC fallback.
 
 ## Extracting Components
 

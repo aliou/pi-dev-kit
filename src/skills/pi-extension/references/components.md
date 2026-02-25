@@ -79,7 +79,14 @@ Parameters passed to the factory:
 
 The generic type (`<string>` above) is the type of value passed to `done()`.
 
-Remember: `custom()` returns `undefined` in RPC and Print modes. Always handle this case. See `references/modes.md` for the three-tier pattern.
+Mode behavior:
+- Interactive: returns the value passed to `done(value)`.
+- RPC: returns `undefined` (by design; no local TUI).
+- Print: returns `undefined`.
+
+Important: `undefined` is ambiguous. In Interactive mode you can also produce it yourself by calling `done(undefined)`. If you need to detect RPC fallback, use explicit non-undefined sentinels for interactive close paths (`null`, `"closed"`, `false`, etc.).
+
+See `references/modes.md` for the three-tier pattern.
 
 ## Theme Styling
 
@@ -129,15 +136,15 @@ Interactive components handle keyboard input through `handleInput`:
 
 ```typescript
 class MyComponent implements Component {
-  private done: (value: string | undefined) => void;
+  private done: (value: string | null) => void;
 
-  constructor(done: (value: string | undefined) => void) {
+  constructor(done: (value: string | null) => void) {
     this.done = done;
   }
 
   handleInput(key: string) {
     if (key === "escape" || key === "q") {
-      this.done(undefined); // Cancel
+      this.done(null); // Cancel (explicit sentinel)
     }
     if (key === "return") {
       this.done("selected"); // Confirm
