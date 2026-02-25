@@ -110,6 +110,89 @@ pi.on("before_agent_start", async (_event, ctx) => {
 
 The system prompt resets each turn, so modifications are not cumulative.
 
+### Guidance Injection Pattern
+
+Extensions that add tools or behavioral patterns the agent may not know how to use correctly should inject guidance into the system prompt. Without it, agents fall back to bash workarounds even when a better tool is available.
+
+**When to inject guidance:**
+- Your extension adds a tool that competes with a natural bash fallback (e.g. a process manager, a CI watcher, a search tool)
+- Correct usage depends on subtle conditions (alert flags, when-not-to-use, alert vs. poll)
+- You have observed agents ignoring the tool or reaching for `bash` instead
+
+**When not to:**
+- The tool description alone is self-explanatory
+- The tool has no plausible bash alternative
+
+**Structure: three files**
+
+`src/guidance.ts` — the guidance text as a named export:
+
+```typescript
+export const MY_EXTENSION_GUIDANCE = `
+## My Extension
+
+Use the \`my_tool\` tool for X. Don't use bash for X.
+
+**Use \`my_tool\` when:**
+- Situation A
+- Situation B
+
+**Use \`bash\` when:**
+- You need the result immediately to proceed (quick commands that finish in seconds)
+
+**Never do this:**
+\`\`\`bash
+workaround_command  # loses observability
+\`\`\`
+
+**Do this instead:**
+\`\`\`
+my_tool({ action: "start", ... })
+\`\`\`
+`;
+```
+
+`src/hooks/system-prompt.ts` — the hook:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { configLoader } from "../config";
+import { MY_EXTENSION_GUIDANCE } from "../guidance";
+
+export function registerGuidance(pi: ExtensionAPI): void {
+  pi.on("before_agent_start", async (event) => {
+    const config = configLoader.getConfig();
+    if (!config.systemPromptGuidance) return;
+
+    return {
+      systemPrompt: `${event.systemPrompt}\n${MY_EXTENSION_GUIDANCE}`,
+    };
+  });
+}
+```
+
+`src/config.ts` — add the toggle (default `true`):
+
+```typescript
+export interface MyExtensionConfig {
+  // ...
+  /** Inject tool guidance into the system prompt each turn. Default: true. */
+  systemPromptGuidance?: boolean;
+}
+```
+
+Call `registerGuidance(pi)` from your hooks setup function.
+
+**What makes guidance effective:**
+
+- Lead with the decision rule: **when to use AND when not to use**. The when-not-to-use is as important — it gives the agent permission to keep using `bash` for quick tasks and prevents overcorrection.
+- Name anti-patterns explicitly by their exact form (`cmd &`, `nohup`, `sleep 30 &&`). Abstract descriptions ("don't use bash workarounds") are ignored.
+- Use 2–3 tight code examples. More than that dilutes attention; fewer leave the pattern underspecified.
+- Keep the guidance section header (`## My Extension`) so it reads as a named capability, not a restriction.
+- Avoid stacking emphasis markers (`NEVER`, `ALWAYS`, `IMPORTANT`). One or two land; more are ignored.
+
+**Reference implementations:** `pi-linkup` (`src/hooks/system-prompt.ts`, `src/guidance.ts`) and `pi-processes` (`src/hooks/system-prompt.ts`, `src/guidance.ts`).
+
 ## Compaction
 
 Trigger compaction programmatically:
