@@ -91,14 +91,16 @@ When implementing, look at these existing extensions for patterns:
 5. **API key gating**: Check before registering tools that require the key. Providers handle missing keys internally via their `models()` function.
 6. **Tool naming**: Prefix with API name for third-party integrations (`linkup_web_search`). No prefix for internal tools (`get_current_time`).
 7. **Tool call header pattern**: Keep `renderCall` consistent: first line `[Tool Name]: [Action] [Main arg] [Option args]`, extra lines for long args. Use display names, not raw tool IDs.
-8. **Long args placement**: Put long prompt/task/question/context strings on following lines. Keep first line scannable.
-9. **Footer spacing**: If a tool result has a footer, keep one blank line before it for readability.
-10. **peerDependencies**: Any package Pi already ships (`@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`) must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta` if imported at runtime. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`.
-11. **Check existing components**: Before creating a new TUI component, check if `pi-tui` or `pi-coding-agent` already exports one that fits.
-12. **Forward abort signals**: Always pass `signal` through to `fetch()`, child processes, and API client methods. A tool that ignores its signal prevents cancellation from reaching the underlying operation. Never prefix with `_signal` unless the tool truly has no async work to cancel.
-13. **Never use `homedir()` for pi paths**: Use the SDK helpers from `@mariozechner/pi-coding-agent` instead. They respect the `PI_CODING_AGENT_DIR` env var which is used for testing and custom setups. Key functions: `getAgentDir()`, `getSettingsPath()`, `getSessionsDir()`, `getPromptsDir()`, `getToolsDir()`, `getCustomThemesDir()`, `getModelsPath()`, `getAuthPath()`, `getBinDir()`, `getDebugLogPath()`. All exported from the main package entry point.
-14. **Config uses the interface pattern**: `config.ts` defines two TypeScript interfaces (`RawConfig` with all fields optional, `ResolvedConfig` with all fields required) and a `ConfigLoader<Raw, Resolved>` instance. Do not use TypeBox schemas for config types.
-15. **Entry point deviations must be documented**: The standard entry point pattern is load config → check `enabled` → register. Deviations (no config, API-key-first ordering, no `enabled` toggle) are acceptable when justified, but must be noted in `AGENTS.md`.
+8. **Deterministic call rendering**: Build `renderCall` with a stable extraction order (action → main arg → option args → long args), process-style. Same input should produce same header layout.
+9. **Long args placement**: Put long prompt/task/question/context strings on following lines. Keep first line scannable.
+10. **Result layout consistency**: In `renderResult`, handle `isPartial` first, start final output with a clear state summary, use `expanded` for compact-vs-full detail, and keep one blank line before any footer.
+11. **peerDependencies**: Any package Pi already ships (`@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`) must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta` if imported at runtime. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`.
+12. **Check existing components**: Before creating a new TUI component, check if `pi-tui` or `pi-coding-agent` already exports one that fits.
+13. **Forward abort signals**: Always pass `signal` through to `fetch()`, `pi.exec()`, and API client methods. A tool that ignores its signal prevents cancellation from reaching the underlying operation. Never prefix with `_signal` unless the tool truly has no async work to cancel.
+14. **Never use Node child_process APIs**: Do not use `child_process.exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, or `execFileSync` to run binaries or shell scripts. Always use `pi.exec()`. `pi.exec` handles CWD, signal propagation, and output capture consistently. The only exception is if you need a long-lived streaming process with stdin/stdout piping that `pi.exec` cannot support — document the reason in code comments.
+15. **Never use `homedir()` for pi paths**: Use the SDK helpers from `@mariozechner/pi-coding-agent` instead. They respect the `PI_CODING_AGENT_DIR` env var which is used for testing and custom setups. Key functions: `getAgentDir()`, `getSettingsPath()`, `getSessionsDir()`, `getPromptsDir()`, `getToolsDir()`, `getCustomThemesDir()`, `getModelsPath()`, `getAuthPath()`, `getBinDir()`, `getDebugLogPath()`. All exported from the main package entry point.
+16. **Config uses the interface pattern**: `config.ts` defines two TypeScript interfaces (`RawConfig` with all fields optional, `ResolvedConfig` with all fields required) and a `ConfigLoader<Raw, Resolved>` instance. Do not use TypeBox schemas for config types.
+17. **Entry point deviations must be documented**: The standard entry point pattern is load config → check `enabled` → register. Deviations (no config, API-key-first ordering, no `enabled` toggle) are acceptable when justified, but must be noted in `AGENTS.md`.
 
 ## Checklist
 
@@ -109,15 +111,19 @@ Before considering an extension complete:
 - [ ] All `onUpdate` calls use optional chaining.
 - [ ] No `.js` file extensions in imports.
 - [ ] `renderCall` uses a consistent first-line pattern (tool, action if any, main arg, options).
+- [ ] `renderCall` arg extraction is deterministic (action → main arg → option args → long args).
 - [ ] Long call arguments are moved to follow-up lines, not crammed into first line.
+- [ ] `renderResult` handles `isPartial`, starts with a clear state summary, and uses `expanded` for compact-vs-full detail.
 - [ ] If result includes a footer, there is a blank line above it.
 - [ ] `ctx.ui.custom()` calls have RPC fallback, and interactive close/cancel paths do not rely on `done(undefined)` when fallback detection uses `result === undefined`.
 - [ ] `tool_call` hooks check `ctx.hasUI` before dialog methods.
 - [ ] Fire-and-forget methods (notify, setStatus, etc.) are used without hasUI guards.
-- [ ] `signal` is forwarded to all async operations (fetch, child processes, API clients). No unused `_signal`.
+- [ ] If using custom message renderers: collapsed view is scannable, expanded view adds depth, and renderer has plain-text fallback when `details` is missing.
+- [ ] `signal` is forwarded to all async operations (fetch, `pi.exec`, API clients). No unused `_signal`.
 - [ ] Missing API keys produce a notification, not a crash.
 - [ ] If in a monorepo: package doesn't depend on private workspace packages (run `pnpm run check:public-deps` if available).
 - [ ] `pnpm typecheck` passes.
+- [ ] No `child_process` imports -- uses `pi.exec()` for shell commands.
 - [ ] No `homedir()` calls for pi paths -- uses SDK helpers (`getAgentDir()`, etc.).
 - [ ] README documents tools, commands, env vars.
 - [ ] `@mariozechner/pi-tui` (and any other Pi-provided package) is in `peerDependencies` with `optional: true` if imported at runtime, not just `devDependencies`.

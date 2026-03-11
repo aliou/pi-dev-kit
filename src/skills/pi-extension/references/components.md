@@ -108,27 +108,24 @@ theme.italic(text)
 theme.strikethrough(text)
 ```
 
-## Component for renderResult
+## `renderResult` is not a Component
 
-Components used in `renderResult` are simpler -- they just return styled strings, not full interactive components:
+`renderResult` is a plain render function. It returns a string (or `undefined`) and is not an interactive `Component` class.
 
 ```typescript
 renderResult(result, { expanded, isPartial }, theme) {
-  if (isPartial) {
-    return theme.fg("muted", "Loading...");
-  }
+  if (isPartial) return theme.fg("muted", "Loading...");
 
-  const { items } = result.details;
-  const lines = [
+  const items = result.details?.items ?? [];
+  const visible = expanded ? items : items.slice(0, 5);
+  return [
     theme.fg("success", `Found ${items.length} results`),
-    "",
-    ...items.map((item: string) => `  ${theme.fg("accent", item)}`),
-  ];
-  return lines.join("\n");
+    ...visible.map((item: string) => `  ${theme.fg("accent", item)}`),
+  ].join("\n");
 },
 ```
 
-This is a render function, not a Component class. It returns a string directly.
+For full `renderCall`/`renderResult` formatting rules, follow `references/tools.md` (Tool UI Rendering Guidelines + consistency contract).
 
 ## Keyboard Handling in custom()
 

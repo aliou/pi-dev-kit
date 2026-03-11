@@ -66,14 +66,18 @@ pi.setLabel(entryId, "checkpoint: before refactor");
 
 ## exec
 
-Run a shell command and get the result:
+Run a shell command and get the result. This is the **only** way to run external binaries or shell scripts from an extension.
 
 ```typescript
-const result = await pi.exec("git status --porcelain", { cwd: ctx.cwd });
+const result = await pi.exec("git status --porcelain", { cwd: process.cwd() });
 // result: { stdout, stderr, exitCode }
 ```
 
-Useful in hooks for git operations, environment checks, etc.
+Useful for git operations, environment checks, running CLI tools, etc.
+
+**Do not use Node `child_process` APIs** (`exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, `execFileSync`). `pi.exec` handles CWD resolution, output capture, and integrates with the extension lifecycle. Using `child_process` directly bypasses these guarantees and creates inconsistent behavior across environments.
+
+The only exception is a long-lived streaming process that requires direct stdin/stdout piping — document the reason in code comments if this applies.
 
 ## Active Tools
 

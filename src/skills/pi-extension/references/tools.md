@@ -155,18 +155,28 @@ const myTool: ToolDefinition = {
   // ... parameters, execute ...
 
   renderCall(params, theme) {
-    return theme.fg("toolTitle", `Searching for: ${params.query}`);
+    const header = [`My Tool: search`, JSON.stringify(params.query), `limit=${params.limit ?? 10}`].join(" ");
+    return theme.fg("toolTitle", header);
   },
 
   renderResult(result, { expanded, isPartial }, theme) {
     if (isPartial) {
-      return theme.fg("muted", "Searching...");
+      return theme.fg("muted", "My Tool: running...");
     }
-    const data = result.details;
-    return [
-      theme.fg("success", `Found ${data.results.length} results`),
-      ...data.results.map((r: string) => `  ${r}`),
-    ].join("\n");
+
+    const items: string[] = result.details?.results ?? [];
+    const visible = expanded ? items : items.slice(0, 5);
+
+    const lines = [
+      theme.fg("success", `Found ${items.length} results`),
+      ...visible.map((r) => `  ${r}`),
+    ];
+
+    if (!expanded && items.length > visible.length) {
+      lines.push(theme.fg("dim", `  ...and ${items.length - visible.length} more`));
+    }
+
+    return lines.join("\n");
   },
 };
 ```
@@ -199,11 +209,48 @@ Guidelines:
 - Prefer wrapping to preserve full meaning over aggressive truncation.
 - For tools without actions, omit colon suffix after tool name if that reads better in your UI system.
 
+### `renderCall` design guide (process-style)
+
+The `process` extension is a good baseline (`../pi-processes/src/tools/index.ts`). Its call renderer is deterministic and keeps headers readable.
+
+Use this extraction order when building header parts:
+
+1. **Action first**: always show action for multi-action tools (`start`, `list`, `kill`, ...).
+2. **Pick one main arg**: choose the single value the user scans for first (name, id, or short command).
+3. **Promote short fields to options**: compact values become option args (`end=true`, `limit=10`).
+4. **Demote long fields to long args**: commands/prompts/instructions move to labeled follow-up lines.
+5. **Keep it stable**: same inputs should produce same ordering and formatting.
+
+Implementation pattern:
+- Build `mainArg`, `optionArgs`, `longArgs` first, then pass to one renderer.
+- If you use `@aliou/pi-utils-ui`, prefer `ToolCallHeader` to avoid hand-built string drift.
+- Quote user-provided names (`"backend"`) when that improves visual parsing.
+- Cap inline length (e.g. 60-80 chars), then spill to `longArgs`.
 ### `renderResult` layout
 
-- Keep body content focused on state and key output.
+- Handle `isPartial` first. Return a short stable loading state.
+- Keep the first non-loading line as a status summary (`Found N results`, `Updated 3 files`, `Failed: reason`).
+- Use `expanded` to switch between compact and full output. Compact should show the top few items plus an omission hint.
+- Keep body content focused on state + key output; avoid dumping raw JSON unless it is the actual output.
 - If you render a footer (stats, backend, counts), keep one blank line above it.
 - Keep footer concise and stable across states.
+- Return `undefined` when custom rendering adds no value; fallback rendering is better than noisy UI.
+
+## Tool Call + UI Consistency Contract
+
+Use this contract to keep tool UX consistent across extensions:
+
+1. **Call line is for scanability**: `renderCall` first line follows `[Tool Name]: [Action] [Main arg] [Option args]`.
+2. **Result starts with state**: `renderResult` starts with a clear state line (running/success/error) before details.
+3. **Long text moves down**: prompts, instructions, and context go to follow-up lines, not the call header.
+4. **Partial updates stay compact**: `isPartial` output should be short and stable to prevent visual churn.
+5. **Expanded controls density**: compact view shows summary + subset; expanded view shows full detail.
+6. **No mode leaks in tool renderers**: `renderCall`/`renderResult` should not branch on mode. Mode-specific behavior belongs in command/tool logic (`references/modes.md`).
+
+Related references:
+- `references/modes.md` for `custom()` fallback behavior and RPC/Print handling.
+- `references/components.md` for interactive component authoring.
+- `references/messages.md` for persistent display via `sendMessage` + `registerMessageRenderer`.
 
 ## Naming Conventions
 
@@ -236,7 +283,7 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 },
 ```
 
-Pass `signal` to every async operation that supports it: `fetch()` calls, child processes, SDK clients, etc.
+Pass `signal` to every async operation that supports it: `fetch()` calls, `pi.exec()` calls, SDK clients, etc.
 
 When wrapping an API client, thread the signal through the entire call chain. The client methods should accept an optional `signal` and forward it to the underlying `fetch()`:
 

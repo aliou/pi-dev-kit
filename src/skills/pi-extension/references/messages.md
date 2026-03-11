@@ -50,6 +50,52 @@ The renderer receives the full message object and the theme. It returns a string
 
 If no renderer is registered for a `customType`, the message's `content` field is displayed as plain text.
 
+## Custom Message Design Guide (breadcrumbs-style)
+
+`breadcrumbs` is a good reference for custom entries/messages (`../pi-extensions/extensions/breadcrumbs/lib/session-link.ts`, plus `commands/handoff.ts` and `commands/spawn.ts`).
+
+### 1) Prefer paired entries for links/handovers
+
+For cross-session workflows, use two custom message types:
+- **Marker** in source session: short line (`Handed off to X` / `Continues in X`).
+- **Source** in new session: header + optional expanded context.
+
+This gives both directions of navigation and keeps history readable.
+
+### 2) Collapsed vs expanded behavior
+
+Keep collapsed view minimal and scannable:
+- one semantic line
+- optional hint (`Press Ctrl+O to expand`) only when extra content exists
+
+Use expanded view for rich content:
+- markdown body
+- multi-line context
+- file lists / instructions
+
+### 3) Renderer resilience
+
+Message renderers should degrade safely:
+- missing `details` => fallback to plain `content`
+- markdown render failure => fallback to plain text
+- unknown fields => ignore, don't throw
+
+### 4) Keep details small and durable
+
+`details` should contain stable identifiers and routing data, not large blobs:
+- session IDs
+- link type (`handoff`, `continue`)
+- short metadata (goal/title)
+
+Put large human-readable content in `content` (for expansion/LLM visibility), not deep nested `details`.
+
+### 5) Use visual hierarchy consistently
+
+For message UIs:
+- muted label + accent target/value (`Continues in <session-name>`)
+- subtle container background for custom message blocks
+- avoid decorative noise; optimize for fast scan in session history
+
 ## Pattern: Command with sendMessage Fallback
 
 This combines with the three-tier pattern from `references/modes.md`. Use `sendMessage` as the RPC fallback for commands that use `custom()`:
@@ -104,3 +150,20 @@ ctx.ui.notify("Proceed with caution", "warning");
 The second argument is the notification type: `"info"`, `"error"`, or `"warning"`. It affects the color/icon.
 
 `notify` is fire-and-forget. It works in Interactive and RPC modes, and is a no-op in Print mode.
+
+## Writing custom entries in a new session
+
+When using `ctx.newSession({ setup })`, write custom entries directly through the setup `SessionManager`:
+
+```typescript
+await ctx.newSession({
+  setup: async (sm) => {
+    sm.appendCustomMessageEntry("my-source-type", "Context text", true, {
+      parentSessionId: "...",
+      linkType: "handoff",
+    });
+  },
+});
+```
+
+Use this pattern for handoff/spawn-like workflows where the new session must start with structured context.
