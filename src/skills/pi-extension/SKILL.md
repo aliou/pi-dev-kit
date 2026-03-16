@@ -18,9 +18,15 @@ import { Type } from "@mariozechner/pi-coding-agent";
 
 // TUI components
 import type { Component, Theme } from "@mariozechner/pi-tui";
-import { Text, Box, Container, SelectList } from "@mariozechner/pi-tui";
+import { Text, Box, Container, Markdown, SelectList } from "@mariozechner/pi-tui";
 
-// Utilities
+// Tool UI components (from @aliou/pi-utils-ui)
+import { ToolCallHeader, ToolBody, ToolFooter } from "@aliou/pi-utils-ui";
+
+// Rendering utilities
+import { getMarkdownTheme, keyHint } from "@mariozechner/pi-coding-agent";
+
+// General utilities
 import { truncateHead, highlightCode, getLanguageFromPath, DynamicBorder, BorderedLoader } from "@mariozechner/pi-coding-agent";
 ```
 
@@ -115,6 +121,7 @@ Before considering an extension complete:
 - [ ] Long call arguments are moved to follow-up lines, not crammed into first line.
 - [ ] `renderResult` handles `isPartial`, starts with a clear state summary, and uses `expanded` for compact-vs-full detail.
 - [ ] If result includes a footer, there is a blank line above it.
+- [ ] `renderResult` handles errors from thrown exceptions: checks for missing expected fields in `details` (framework passes `{}`, not `undefined`), extracts error message from `content`.
 - [ ] `ctx.ui.custom()` calls have RPC fallback, and interactive close/cancel paths do not rely on `done(undefined)` when fallback detection uses `result === undefined`.
 - [ ] `tool_call` hooks check `ctx.hasUI` before dialog methods.
 - [ ] Fire-and-forget methods (notify, setStatus, etc.) are used without hasUI guards.

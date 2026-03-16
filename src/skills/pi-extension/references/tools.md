@@ -94,6 +94,111 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 
 Do not try to return `isError` in the result object. The `AgentToolResult` type does not have an `isError` field. Only throwing sets `isError: true` on the tool result event sent to the LLM.
 
+### Error rendering in `renderResult`
+
+When a tool throws, the framework still calls `renderResult`. It passes:
+- `content`: an array with the error message as a text block
+- `details`: an empty object `{}` (not `undefined`)
+
+Your `renderResult` must detect this and display the error. Check for missing expected fields in `details` -- do not check `!details` since the framework always provides an object.
+
+```typescript
+// Full example: a tool that can fail, with proper error rendering.
+import { ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
+import type {
+  AgentToolResult,
+  ExtensionAPI,
+  ExtensionContext,
+  Theme,
+  ToolRenderResultOptions,
+} from "@mariozechner/pi-coding-agent";
+import { Container, Text } from "@mariozechner/pi-tui";
+import { type Static, Type } from "@sinclair/typebox";
+
+interface DivideDetails {
+  result?: number;
+}
+
+const parameters = Type.Object({
+  dividend: Type.Number({ description: "The number to divide" }),
+  divisor: Type.Number({ description: "The number to divide by" }),
+});
+
+type DivideParams = Static<typeof parameters>;
+
+const divideTool = {
+  name: "divide",
+  label: "Divide",
+  description: "Divide two numbers.",
+  parameters,
+
+  async execute(
+    _toolCallId: string,
+    params: DivideParams,
+    _signal: AbortSignal | undefined,
+    _onUpdate: undefined,
+    _ctx: ExtensionContext,
+  ): Promise<AgentToolResult<DivideDetails>> {
+    if (params.divisor === 0) {
+      throw new Error("Division by zero");
+    }
+    const result = params.dividend / params.divisor;
+    return {
+      content: [{ type: "text", text: `${result}` }],
+      details: { result },
+    };
+  },
+
+  renderCall(args: DivideParams, theme: Theme) {
+    return new ToolCallHeader(
+      { toolName: "Divide", mainArg: `${args.dividend} / ${args.divisor}` },
+      theme,
+    );
+  },
+
+  renderResult(
+    result: AgentToolResult<DivideDetails>,
+    options: ToolRenderResultOptions,
+    theme: Theme,
+  ) {
+    if (options.isPartial) {
+      return new Text(theme.fg("muted", "Dividing..."), 0, 0);
+    }
+
+    const details = result.details;
+    const container = new Container();
+
+    // Detect error: details is {} when the tool threw.
+    // Check for missing expected fields, not !details.
+    if (details?.result === undefined) {
+      const textBlock = result.content.find((c) => c.type === "text");
+      const errorMsg =
+        (textBlock?.type === "text" && textBlock.text) || "Division failed";
+      container.addChild(new Text(theme.fg("error", errorMsg), 0, 0));
+      return container;
+    }
+
+    container.addChild(
+      new Text(theme.fg("success", `Result: ${details.result}`), 0, 0),
+    );
+
+    container.addChild(new Text("", 0, 0));
+    container.addChild(
+      new ToolFooter(theme, {
+        items: [{ label: "result", value: `${details.result}` }],
+        separator: " | ",
+      }),
+    );
+
+    return container;
+  },
+};
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool(divideTool);
+}
+```
+
 ## Parameters Schema
 
 Use TypeBox (`Type.*`) for parameter schemas. The LLM sees the schema to know what arguments to provide.
