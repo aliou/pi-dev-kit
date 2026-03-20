@@ -194,7 +194,7 @@ export function setupDocsTool(pi: ExtensionAPI) {
         } else {
           lines.push(
             theme.fg("accent", `${details.docFiles.length} markdown files`) +
-              ` (${keyHint("expandTools", "to expand")})`,
+              ` (${keyHint("app.tools.expand", "to expand")})`,
             "",
           );
 

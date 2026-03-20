@@ -414,7 +414,7 @@ export function setupChangelogTool(pi: ExtensionAPI) {
         if (!options.expanded) {
           lines.push(
             "",
-            theme.fg("muted", `${keyHint("expandTools", "to expand")}`),
+            theme.fg("muted", `${keyHint("app.tools.expand", "to expand")}`),
           );
         }
 
