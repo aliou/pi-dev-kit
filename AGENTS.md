@@ -1,6 +1,6 @@
-# pi-extension-dev
+# pi-dev-kit
 
-Public Pi extension providing tools and commands for developing and updating Pi extensions.
+Public Pi extension providing tools and prompts for building, maintaining, and updating Pi extensions.
 
 ## Stack
 

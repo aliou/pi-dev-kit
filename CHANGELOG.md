@@ -1,4 +1,4 @@
-# @aliou/pi-extension-dev
+# @aliou/pi-dev-kit
 
 ## 0.4.6
 
@@ -48,7 +48,7 @@
 
 ### Patch Changes
 
-- 6657016: Standardize extension-dev tool renderCall headers with the shared tool header pattern for consistent tool/action/argument readability.
+- 6657016: Standardize dev-kit tool renderCall headers with the shared tool header pattern for consistent tool/action/argument readability.
 
 ## 0.4.0
 
@@ -66,7 +66,7 @@
 
 ### Patch Changes
 
-- 82c1d39: Move pi-extension skill into extension-dev package, add tool delegation warning in skill docs, standardize peerDependencies to >=0.51.0.
+- 82c1d39: Move pi-extension skill into the dev kit package, add tool delegation warning in skill docs, standardize peerDependencies to >=0.51.0.
 
 ## 0.2.0
 
@@ -84,7 +84,7 @@
 
 ### Minor Changes
 
-- 3324434: Initial release of @aliou/pi-extension-dev, replacing @aliou/pi-meta.
+- 3324434: Initial release of @aliou/pi-dev-kit, replacing @aliou/pi-meta.
 
   Tools: pi_version, pi_changelog, pi_docs, detect_package_manager.
   Command: /extensions:update [VERSION] - update Pi extensions to installed or latest version.

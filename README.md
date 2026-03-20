@@ -1,6 +1,6 @@
-# Pi Extension Dev
+# Pi Dev Kit
 
-Tools and commands for developing and updating Pi extensions.
+Tools and commands for building, maintaining, and updating Pi extensions.
 
 ## Demo
 
@@ -16,14 +16,16 @@ https://github.com/user-attachments/assets/44a96009-0653-4803-8590-d5a8a5131f4c
 ## Installation
 
 ```bash
-pi install npm:@aliou/pi-extension-dev
+pi install npm:@aliou/pi-dev-kit
 ```
 
 Or from git:
 
 ```bash
-pi install git:github.com/aliou/pi-extension-dev
+pi install git:github.com/aliou/pi-dev-kit
 ```
+
+Formerly `@aliou/pi-extension-dev`. This package continues from the same release line under a new name.
 
 ## Commands
 
