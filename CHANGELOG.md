@@ -1,5 +1,13 @@
 # @aliou/pi-dev-kit
 
+## 0.5.0
+
+### Minor Changes
+
+- a214efa: Rename the package from `@aliou/pi-extension-dev` to `@aliou/pi-dev-kit`.
+
+  The package continues on the same release line under the new name. Update installation docs and package metadata to match the rename.
+
 ## 0.4.6
 
 ### Patch Changes
