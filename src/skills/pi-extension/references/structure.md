@@ -68,16 +68,19 @@ Not every extension needs every directory. A simple extension with one tool migh
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": ">=CURRENT_VERSION",
+    "@mariozechner/pi-ai": ">=CURRENT_VERSION",
     "@mariozechner/pi-tui": ">=CURRENT_VERSION"
   },
   "peerDependenciesMeta": {
     "@mariozechner/pi-coding-agent": { "optional": true },
+    "@mariozechner/pi-ai": { "optional": true },
     "@mariozechner/pi-tui": { "optional": true }
   },
   "devDependencies": {
     "@aliou/biome-plugins": "^0.3.0",
     "@biomejs/biome": "^2.0.0",
     "@changesets/cli": "^2.27.0",
+    "@mariozechner/pi-ai": "CURRENT_VERSION",
     "@mariozechner/pi-coding-agent": "CURRENT_VERSION",
     "@mariozechner/pi-tui": "CURRENT_VERSION",
     "@types/node": "^25.0.0",
@@ -120,7 +123,14 @@ Only include `pi` sub-fields that are actually used. `skills`, `themes`, `prompt
 | `prompts` | Array of directories containing prompt files. Optional. |
 | `video` | URL to an `.mp4` demo video. Displayed on the pi website package listing. Not used by pi itself. Optional. |
 
-**`peerDependencies`**: Declares the minimum pi version required. Both `@mariozechner/pi-coding-agent` and `@mariozechner/pi-tui` must be listed here as optional peers if your extension imports from either at runtime. Pi already ships these packages, so marking them as optional peers prevents npm from installing duplicate copies when a user installs your extension. Use `>=` with the current version when creating.
+**`peerDependencies`**: Declares the minimum pi version required. Pi ships these packages and injects them via jiti at runtime, so extensions never need to install them:
+
+- `@mariozechner/pi-coding-agent` — core types, utilities, `Type` (re-exported from TypeBox)
+- `@mariozechner/pi-tui` — TUI components
+- `@mariozechner/pi-ai` — AI utilities (`StringEnum`, etc.)
+- `@sinclair/typebox` — schema definitions (also re-exported from `pi-coding-agent`)
+
+List any of these you import at runtime in `peerDependencies` as optional peers. This prevents npm from installing duplicate copies when a user installs your extension. Use `>=` with the current version when creating.
 
 **`peerDependenciesMeta`**: Marks peer dependencies as optional. Without `optional: true`, npm 7+ auto-installs peers that are not already present, which defeats the purpose — Pi already provides them.
 
