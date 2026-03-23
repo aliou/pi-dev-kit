@@ -10,7 +10,6 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { resolveCtx } from "./utils";
 
 const Params = Type.Object({});
 type ParamsType = Record<string, never>;
@@ -55,12 +54,11 @@ export function setupPackageManagerTool(pi: ExtensionAPI) {
     async execute(
       _toolCallId: string,
       _params: ParamsType,
-      signal: AbortSignal | undefined,
-      onUpdate: unknown,
+      _signal: AbortSignal | undefined,
+      _onUpdate: unknown,
       ctx: ExtensionContext,
     ): Promise<ExecuteResult> {
-      const resolvedCtx = resolveCtx(signal, onUpdate, ctx);
-      const cwd = resolvedCtx.cwd;
+      const cwd = ctx.cwd;
 
       try {
         const packageJsonPath = path.join(cwd, "package.json");
