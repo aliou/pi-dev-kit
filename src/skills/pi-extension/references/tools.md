@@ -2,19 +2,49 @@
 
 Tools are functions the LLM can call. They are the primary way extensions add capabilities to pi.
 
+## Imports
+
+Use these imports at the top of your tool file:
+
+```typescript
+import { ToolCallHeader, ToolBody, ToolFooter } from "@aliou/pi-utils-ui";
+import type {
+  AgentToolResult,
+  AgentToolUpdateCallback,
+  ExtensionAPI,
+  ExtensionContext,
+  Theme,
+  ToolRenderResultOptions,
+} from "@mariozechner/pi-coding-agent";
+import { getMarkdownTheme, keyHint, truncateHead, formatSize } from "@mariozechner/pi-coding-agent";
+import { Container, Markdown, Text } from "@mariozechner/pi-tui";
+import { type Static, Type } from "@mariozechner/pi-coding-agent";
+```
+
 ## Registration
 
 ```typescript
-import { Type, type ExtensionAPI, type ToolDefinition } from "@mariozechner/pi-coding-agent";
-
-const myTool: ToolDefinition = {
+const myTool = {
   name: "my_tool",
+  label: "My Tool", // Required: human-readable name for UI
   description: "What this tool does. The LLM reads this to decide when to call it.",
+  promptSnippet: "Search for items by query", // One-liner for "Available tools" system prompt
+  promptGuidelines: [ // Guideline bullets for "Guidelines" system prompt when active
+    "Use this tool when the user asks about search",
+    "Prefer specific queries over broad ones",
+  ],
   parameters: Type.Object({
     query: Type.String({ description: "Search query" }),
     limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
   }),
-  execute: async (toolCallId, params, signal, onUpdate, ctx) => {
+
+  async execute(
+    toolCallId: string,
+    params: MyToolParams,
+    signal: AbortSignal | undefined,
+    onUpdate: AgentToolUpdateCallback<MyToolDetails> | undefined,
+    ctx: ExtensionContext,
+  ): Promise<AgentToolResult<MyToolDetails>> {
     const results = await doSomething(params.query, params.limit);
     return {
       content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
@@ -23,9 +53,43 @@ const myTool: ToolDefinition = {
   },
 };
 
+// Typed param alias - define once, use everywhere
+type MyToolParams = Static<typeof myTool.parameters>;
+interface MyToolDetails {
+  results: string[];
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool(myTool);
 }
+```
+
+## Tool Definition Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `string` | Yes | Snake_case identifier used in tool calls |
+| `label` | `string` | Yes | Human-readable name shown in UI |
+| `description` | `string` | Yes | What the tool does (LLM reads this) |
+| `parameters` | `TSchema` | Yes | TypeBox schema for arguments |
+| `promptSnippet` | `string` | No | One-liner injected into "Available tools" system prompt. Custom tools without this are omitted from that section. |
+| `promptGuidelines` | `string[]` | No | Guideline bullets appended to "Guidelines" system prompt when this tool is active |
+| `execute` | `function` | Yes | Implementation |
+| `renderCall` | `function` | No | Custom call rendering |
+| `renderResult` | `function` | No | Custom result rendering |
+
+## Typed Param Alias
+
+Define a type alias at the top of your file instead of repeating `Static<typeof parameters>`:
+
+```typescript
+const parameters = Type.Object({
+  query: Type.String({ description: "Search query" }),
+  limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
+});
+
+type MyToolParams = Static<typeof parameters>;
+// Use MyToolParams everywhere: execute params, renderCall args, context.args, etc.
 ```
 
 ## Execute Signature
@@ -77,7 +141,7 @@ return {
 
 ## Error Handling
 
-To report a tool call failure, **throw an error**. The framework catches it, sets `isError: true` on the tool result, and sends the error message to the LLM.
+To report a tool call failure, **throw an error**. The framework catches it and produces a result with `isError: true` on the context.
 
 ```typescript
 execute: async (toolCallId, params, signal, onUpdate, ctx) => {
@@ -92,112 +156,66 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 },
 ```
 
-Do not try to return `isError` in the result object. The `AgentToolResult` type does not have an `isError` field. Only throwing sets `isError: true` on the tool result event sent to the LLM.
+The framework's `createErrorToolResult` sets `details: {}` (empty object, not `undefined`) and puts the error message in `content`:
+
+```typescript
+// Framework produces when tool throws:
+{
+  content: [{ type: "text", text: errorMessage }],
+  details: {}
+}
+// And sets context.isError = true in renderResult
+```
 
 ### Error rendering in `renderResult`
 
-When a tool throws, the framework still calls `renderResult`. It passes:
-- `content`: an array with the error message as a text block
-- `details`: an empty object `{}` (not `undefined`)
+The framework passes `isError` on the 4th `context` parameter to `renderResult`, but `ToolRenderContext` is not currently exported from the public API. Two practical approaches:
 
-Your `renderResult` must detect this and display the error. Check for missing expected fields in `details` -- do not check `!details` since the framework always provides an object.
+**Approach 1: Check for missing expected fields in `details`** (recommended for extensions)
+
+When a tool throws, the framework sets `details: {}` (empty object). Check for missing expected fields:
 
 ```typescript
-// Full example: a tool that can fail, with proper error rendering.
-import { ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
-import type {
-  AgentToolResult,
-  ExtensionAPI,
-  ExtensionContext,
-  Theme,
-  ToolRenderResultOptions,
-} from "@mariozechner/pi-coding-agent";
-import { Container, Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@mariozechner/pi-coding-agent";
+renderResult(
+  result: AgentToolResult<MyToolDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+) {
+  const { details } = result;
 
-interface DivideDetails {
-  result?: number;
-}
-
-const parameters = Type.Object({
-  dividend: Type.Number({ description: "The number to divide" }),
-  divisor: Type.Number({ description: "The number to divide by" }),
-});
-
-type DivideParams = Static<typeof parameters>;
-
-const divideTool = {
-  name: "divide",
-  label: "Divide",
-  description: "Divide two numbers.",
-  parameters,
-
-  async execute(
-    _toolCallId: string,
-    params: DivideParams,
-    _signal: AbortSignal | undefined,
-    _onUpdate: undefined,
-    _ctx: ExtensionContext,
-  ): Promise<AgentToolResult<DivideDetails>> {
-    if (params.divisor === 0) {
-      throw new Error("Division by zero");
-    }
-    const result = params.dividend / params.divisor;
-    return {
-      content: [{ type: "text", text: `${result}` }],
-      details: { result },
-    };
-  },
-
-  renderCall(args: DivideParams, theme: Theme) {
-    return new ToolCallHeader(
-      { toolName: "Divide", mainArg: `${args.dividend} / ${args.divisor}` },
-      theme,
-    );
-  },
-
-  renderResult(
-    result: AgentToolResult<DivideDetails>,
-    options: ToolRenderResultOptions,
-    theme: Theme,
-  ) {
-    if (options.isPartial) {
-      return new Text(theme.fg("muted", "Dividing..."), 0, 0);
-    }
-
-    const details = result.details;
-    const container = new Container();
-
-    // Detect error: details is {} when the tool threw.
-    // Check for missing expected fields, not !details.
-    if (details?.result === undefined) {
-      const textBlock = result.content.find((c) => c.type === "text");
-      const errorMsg =
-        (textBlock?.type === "text" && textBlock.text) || "Division failed";
-      container.addChild(new Text(theme.fg("error", errorMsg), 0, 0));
-      return container;
-    }
-
-    container.addChild(
-      new Text(theme.fg("success", `Result: ${details.result}`), 0, 0),
-    );
-
-    container.addChild(new Text("", 0, 0));
-    container.addChild(
-      new ToolFooter(theme, {
-        items: [{ label: "result", value: `${details.result}` }],
-        separator: " | ",
-      }),
-    );
-
-    return container;
-  },
-};
-
-export default function (pi: ExtensionAPI) {
-  pi.registerTool(divideTool);
+  // details is {} when tool threw — expected fields are missing
+  if (!details?.results) {
+    const textBlock = result.content.find((c) => c.type === "text");
+    const errorMsg = (textBlock?.type === "text" && textBlock.text) || "Operation failed";
+    return new Text(theme.fg("error", errorMsg), 0, 0);
+  }
+  // ... normal rendering
 }
 ```
+
+**Approach 2: Use the 4th context parameter** (used by native tools)
+
+Define a minimal interface locally:
+
+```typescript
+interface RenderContext { isError: boolean }
+
+renderResult(
+  result: AgentToolResult<MyToolDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+  context: RenderContext,
+) {
+  if (context.isError) {
+    const textBlock = result.content.find((c) => c.type === "text");
+    const errorMsg = textBlock?.type === "text" ? textBlock.text : "Operation failed";
+    return new Text(theme.fg("error", errorMsg), 0, 0);
+  }
+  // ... normal rendering
+}
+```
+
+Both approaches work. Approach 1 is more common in published extensions. Approach 2 is what native tools use.
 
 ## Parameters Schema
 
@@ -254,45 +272,126 @@ execute: async (toolCallId, params, signal, onUpdate, ctx) => {
 
 Override how a tool's invocation and result appear in the TUI.
 
+### `renderCall` Signature
+
 ```typescript
-const myTool: ToolDefinition = {
-  name: "my_tool",
-  // ... parameters, execute ...
-
-  renderCall(params, theme) {
-    const header = [`My Tool: search`, JSON.stringify(params.query), `limit=${params.limit ?? 10}`].join(" ");
-    return theme.fg("toolTitle", header);
-  },
-
-  renderResult(result, { expanded, isPartial }, theme) {
-    if (isPartial) {
-      return theme.fg("muted", "My Tool: running...");
-    }
-
-    const items: string[] = result.details?.results ?? [];
-    const visible = expanded ? items : items.slice(0, 5);
-
-    const lines = [
-      theme.fg("success", `Found ${items.length} results`),
-      ...visible.map((r) => `  ${r}`),
-    ];
-
-    if (!expanded && items.length > visible.length) {
-      lines.push(theme.fg("dim", `  ...and ${items.length - visible.length} more`));
-    }
-
-    return lines.join("\n");
-  },
-};
+renderCall(args: MyToolParams, theme: Theme): Component
 ```
 
-`renderCall` receives the params the LLM passed and returns a string shown when the tool is invoked.
+A 3rd `context` param is available from the framework but rarely needed in `renderCall`.
 
-`renderResult` receives the result (with `details`) and rendering options:
-- `expanded`: Whether the entry is expanded in the TUI.
-- `isPartial`: Whether this is a streaming update (from `onUpdate`) or the final result.
+Use `ToolCallHeader` from `@aliou/pi-utils-ui`:
 
-Both return a string or undefined (falls back to default rendering).
+```typescript
+renderCall(args: MyToolParams, theme: Theme) {
+  return new ToolCallHeader(
+    {
+      toolName: "My Tool",
+      action: "search",           // Optional: for multi-action tools
+      mainArg: `"${args.query}"`, // Primary thing user scans for
+      optionArgs: [`limit=${args.limit ?? 10}`], // Compact key-value pairs
+      longArgs: [],               // Long text goes here
+      showColon: true,            // Whether to show colon after tool name
+    },
+    theme,
+  );
+}
+```
+
+### `renderResult` Signature
+
+```typescript
+renderResult(
+  result: AgentToolResult<TDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+): Component
+```
+
+- `options` has `expanded` and `isPartial`
+- `result.details` is `{}` (empty object) when the tool threw an error
+- A 4th `context` param is available (see Error Handling above) but not required
+
+```typescript
+renderResult(
+  result: AgentToolResult<MyToolDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+) {
+  // 1. Handle partial state first with stable message
+  if (options.isPartial) {
+    return new Text(theme.fg("muted", "MyTool: fetching..."), 0, 0);
+  }
+
+  const { details } = result;
+
+  // 2. Handle errors: details is {} when tool threw
+  if (!details?.results) {
+    const textBlock = result.content.find((c) => c.type === "text");
+    const errorMsg = (textBlock?.type === "text" && textBlock.text) || "Operation failed";
+    return new Text(theme.fg("error", errorMsg), 0, 0);
+  }
+
+  // 3. Build fields for ToolBody (showCollapsed controls collapsed/expanded visibility)
+  const items = details.results;
+
+  const fields: Array<{ label: string; value: string; showCollapsed?: boolean } | Text> = [
+    { label: "Results", value: `${items.length} items`, showCollapsed: true },
+  ];
+
+  // 4. Build conditional footer
+  const footerItems: Array<{ label: string; value: string }> = [];
+  if (items.length > 0) {
+    footerItems.push({ label: "count", value: `${items.length}` });
+  }
+
+  return new ToolBody(
+    {
+      fields,
+      footer: footerItems.length > 0
+        ? new ToolFooter(theme, { items: footerItems, separator: " | " })
+        : undefined,
+      includeSpacerBeforeFooter: fields.length > 0,
+    },
+    options,
+    theme,
+  );
+}
+```
+
+### `renderCall` Design Guide
+
+The `process` extension is a good baseline. Its call renderer is deterministic and keeps headers readable.
+
+Use this extraction order when building header parts:
+
+1. **Action first**: always show action for multi-action tools (`start`, `list`, `kill`, ...).
+2. **Pick one main arg**: choose the single value the user scans for first (name, id, or short command).
+3. **Promote short fields to options**: compact values become option args (`end=true`, `limit=10`).
+4. **Demote long fields to long args**: commands/prompts/instructions move to labeled follow-up lines.
+5. **Keep it stable**: same inputs should produce same ordering and formatting.
+
+Implementation pattern:
+- Build `mainArg`, `optionArgs`, `longArgs` first, then pass to `ToolCallHeader`.
+- Quote user-provided names (`"backend"`) when that improves visual parsing.
+- Cap inline length (e.g. 60-80 chars), then spill to `longArgs`.
+
+### `renderResult` Guidelines
+
+- Handle `isPartial` first with a **stable, tool-scoped message** like `"MyTool: fetching..."`. Do NOT echo streaming content.
+- Handle errors by checking for missing expected fields in `details` (framework sets `details: {}` on throw). Alternatively use the 4th `context` param with `context.isError`.
+- Use `ToolBody` with `showCollapsed: true` fields for collapsed/expanded filtering.
+- Use `ToolFooter` for stats/metadata. Omit when empty: `footer: items.length > 0 ? new ToolFooter(...) : undefined`.
+- Use `includeSpacerBeforeFooter: fields.length > 0` to avoid blank line when body is empty.
+- Remove redundant success footer items — don't show `status: ok` when success is obvious.
+- Use `Container` + `addChild()` for multi-element results instead of string concatenation.
+- Use `Markdown` component for rich markdown content:
+  ```typescript
+  new Markdown(text, 0, 0, getMarkdownTheme(), { color: (t) => theme.fg("toolOutput", t) })
+  ```
+- Use `keyHint("app.tools.expand", "to expand")` for expand hints.
+- Collapsed result should show **actionable preview** (last N lines, first N items with status), not just a status badge.
+- Humanize error messages with names first: `"Could not get X for "name" (id)"`.
 
 ## Tool UI Rendering Guidelines
 
@@ -306,7 +405,7 @@ Use this line model:
 - Additional lines: long args only
 
 Guidelines:
-- Tool name should be a human display label, not a raw internal identifier.
+- Tool name should be a human display label (`label`), not a raw internal identifier (`name`).
 - Show `action` only when it adds meaning (multi-action tools like process managers).
 - Main arg should be the primary thing user cares about (query, session id, target id/name).
 - Option args should be compact key-value pairs (`limit=10`, `cwd=/path`).
@@ -314,30 +413,13 @@ Guidelines:
 - Prefer wrapping to preserve full meaning over aggressive truncation.
 - For tools without actions, omit colon suffix after tool name if that reads better in your UI system.
 
-### `renderCall` design guide (process-style)
-
-The `process` extension is a good baseline (`../pi-processes/src/tools/index.ts`). Its call renderer is deterministic and keeps headers readable.
-
-Use this extraction order when building header parts:
-
-1. **Action first**: always show action for multi-action tools (`start`, `list`, `kill`, ...).
-2. **Pick one main arg**: choose the single value the user scans for first (name, id, or short command).
-3. **Promote short fields to options**: compact values become option args (`end=true`, `limit=10`).
-4. **Demote long fields to long args**: commands/prompts/instructions move to labeled follow-up lines.
-5. **Keep it stable**: same inputs should produce same ordering and formatting.
-
-Implementation pattern:
-- Build `mainArg`, `optionArgs`, `longArgs` first, then pass to one renderer.
-- If you use `@aliou/pi-utils-ui`, prefer `ToolCallHeader` to avoid hand-built string drift.
-- Quote user-provided names (`"backend"`) when that improves visual parsing.
-- Cap inline length (e.g. 60-80 chars), then spill to `longArgs`.
 ### `renderResult` layout
 
-- Handle `isPartial` first. Return a short stable loading state.
+- Handle `isPartial` first. Return a short stable loading state with tool-scoped message.
 - Keep the first non-loading line as a status summary (`Found N results`, `Updated 3 files`, `Failed: reason`).
 - Use `expanded` to switch between compact and full output. Compact should show the top few items plus an omission hint.
 - Keep body content focused on state + key output; avoid dumping raw JSON unless it is the actual output.
-- If you render a footer (stats, backend, counts), keep one blank line above it.
+- If you render a footer (stats, backend, counts), use `includeSpacerBeforeFooter` to control blank line.
 - Keep footer concise and stable across states.
 - Return `undefined` when custom rendering adds no value; fallback rendering is better than noisy UI.
 
@@ -346,9 +428,9 @@ Implementation pattern:
 Use this contract to keep tool UX consistent across extensions:
 
 1. **Call line is for scanability**: `renderCall` first line follows `[Tool Name]: [Action] [Main arg] [Option args]`.
-2. **Result starts with state**: `renderResult` starts with a clear state line (running/success/error) before details.
+2. **Result detects errors** by checking for missing expected fields in `details` (framework sets `details: {}` on throw).
 3. **Long text moves down**: prompts, instructions, and context go to follow-up lines, not the call header.
-4. **Partial updates stay compact**: `isPartial` output should be short and stable to prevent visual churn.
+4. **Partial updates use a fixed tool-scoped string**, not echoed streaming content.
 5. **Expanded controls density**: compact view shows summary + subset; expanded view shows full detail.
 6. **No mode leaks in tool renderers**: `renderCall`/`renderResult` should not branch on mode. Mode-specific behavior belongs in command/tool logic (`references/modes.md`).
 
@@ -413,18 +495,454 @@ Do not prefix signal with underscore (`_signal`) unless the tool genuinely canno
 
 ## Output Truncation
 
-For tools that may return large outputs, use the `truncateHead` utility:
+For tools that may return large outputs, use `truncateHead()` which returns a `TruncationResult`:
 
 ```typescript
-import { truncateHead } from "@mariozechner/pi-coding-agent";
+import { truncateHead, formatSize } from "@mariozechner/pi-coding-agent";
+import { createWriteStream } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
-execute: async (toolCallId, params, signal, onUpdate, ctx) => {
-  const fullOutput = await getLargeOutput();
-  return {
-    content: [{ type: "text", text: truncateHead(fullOutput, 50000) }], // Keep last 50KB
-    details: {},
+interface FetchDetails {
+  content: string;
+  url: string;
+  truncated: boolean;
+  totalLines: number;
+  totalBytes: number;
+  outputLines: number;
+  outputBytes: number;
+  tempFile?: string;
+}
+
+async execute(
+  _toolCallId: string,
+  params: FetchParams,
+  signal: AbortSignal | undefined,
+  _onUpdate: undefined,
+  _ctx: ExtensionContext,
+): Promise<AgentToolResult<FetchDetails>> {
+  const response = await fetch(params.url, { signal });
+  const fullContent = await response.text();
+
+  // truncateHead keeps the tail (most recent content)
+  const truncated = truncateHead(fullContent, {
+    maxBytes: 50000,
+    maxLines: 2000,
+  });
+
+  const details: FetchDetails = {
+    content: truncated.content,
+    url: params.url,
+    truncated: truncated.truncated,
+    totalLines: truncated.totalLines,
+    totalBytes: truncated.totalBytes,
+    outputLines: truncated.outputLines,
+    outputBytes: truncated.outputBytes,
   };
-},
+
+  // Write full content to temp file if truncated
+  if (truncated.truncated) {
+    const tempFile = join(tmpdir(), `web-fetch-${Date.now()}.txt`);
+    const stream = createWriteStream(tempFile);
+    stream.write(fullContent);
+    stream.end();
+    details.tempFile = tempFile;
+  }
+
+  return {
+    content: [{ type: "text", text: truncated.content }],
+    details,
+  };
+}
 ```
 
-`truncateHead` keeps the tail of the output (most recent content), which is usually most relevant.
+### Truncation Result Fields
+
+```typescript
+interface TruncationResult {
+  content: string;      // The truncated content (or full if not truncated)
+  truncated: boolean;   // Whether truncation occurred
+  totalLines: number;   // Original total lines
+  totalBytes: number;   // Original total bytes
+  outputLines: number;  // Lines in output
+  outputBytes: number;  // Bytes in output
+}
+```
+
+### Rendering Truncated Output
+
+```typescript
+renderResult(
+  result: AgentToolResult<FetchDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+) {
+  if (options.isPartial) {
+    return new Text(theme.fg("muted", "WebFetch: fetching..."), 0, 0);
+  }
+
+  const { details } = result;
+
+  if (!details?.content) {
+    const textBlock = result.content.find((c) => c.type === "text");
+    const errorMsg = (textBlock?.type === "text" && textBlock.text) || "Fetch failed";
+    return new Text(theme.fg("error", errorMsg), 0, 0);
+  }
+  const container = new Container();
+
+  // Body with content preview
+  const fields = [
+    { label: "URL", value: details.url, showCollapsed: true },
+    { label: "Size", value: formatSize(details.totalBytes), showCollapsed: true },
+  ];
+
+  container.addChild(new ToolBody(theme, { fields, expanded: options.expanded }));
+
+  // Footer with truncation info
+  const footerItems = [];
+
+  if (details.truncated) {
+    footerItems.push(
+      { label: "showing", value: `${details.outputLines}/${details.totalLines} lines` },
+      { label: "full output", value: details.tempFile ?? "temp file" },
+    );
+  } else {
+    footerItems.push({ label: "lines", value: `${details.totalLines}` });
+  }
+
+  container.addChild(
+    new ToolFooter(theme, {
+      items: footerItems,
+      separator: " | ",
+      includeSpacerBeforeFooter: fields.length > 0,
+    }),
+  );
+
+  return container;
+}
+```
+
+## Multi-Action Tools
+
+For tools with multiple actions (e.g., `start`, `list`, `kill`), organize code for maintainability:
+
+### File Structure
+
+```
+tools/
+  my_tool/
+    index.ts           // Tool definition, registration, execute switch
+    actions/
+      start.ts         // start action implementation
+      list.ts          // list action implementation
+      kill.ts          // kill action implementation
+    render.ts          // renderCall and renderResult (when complex)
+    types.ts           // Shared types and param schema
+```
+
+### Action Pattern
+
+Each action takes an SDK client and typed params, returns typed results:
+
+```typescript
+// actions/start.ts
+export interface StartParams {
+  name: string;
+  command: string;
+  cwd?: string;
+}
+
+export interface StartResult {
+  sessionId: string;
+  pid: number;
+}
+
+export async function start(
+  client: MyClient,
+  params: StartParams,
+  signal?: AbortSignal,
+): Promise<StartResult> {
+  return client.startSession({
+    name: params.name,
+    command: params.command,
+    cwd: params.cwd,
+    signal,
+  });
+}
+```
+
+### Execute Delegation
+
+```typescript
+// index.ts
+async execute(
+  toolCallId: string,
+  params: MyToolParams,
+  signal: AbortSignal | undefined,
+  onUpdate: AgentToolUpdateCallback<MyToolDetails> | undefined,
+  ctx: ExtensionContext,
+): Promise<AgentToolResult<MyToolDetails>> {
+  switch (params.action) {
+    case "start":
+      return startAction(client, params, signal, onUpdate, ctx);
+    case "list":
+      return listAction(client, params, signal);
+    case "kill":
+      return killAction(client, params, signal);
+    default:
+      throw new Error(`Unknown action: ${params.action}`);
+  }
+}
+```
+
+### Separate Render Module
+
+When rendering is complex, extract to `render.ts`:
+
+```typescript
+// render.ts
+export function renderCall(args: MyToolParams, theme: Theme) {
+  return new ToolCallHeader(
+    {
+      toolName: "MyTool",
+      action: args.action,
+      mainArg: getMainArg(args),
+      optionArgs: getOptionArgs(args),
+      longArgs: getLongArgs(args),
+    },
+    theme,
+  );
+}
+
+export function renderResult(
+  result: AgentToolResult<MyToolDetails>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+) {
+  // Complex rendering logic here
+}
+```
+
+```typescript
+// index.ts
+import { renderCall, renderResult } from "./render.js";
+
+const myTool = {
+  // ...
+  renderCall,
+  renderResult,
+};
+```
+
+**Examples to reference:**
+- `pi-processes`: Multi-action process management with complex rendering
+- `pi-linear`: Multi-action Linear API integration
+
+## Full Example
+
+Here's a realistic tool demonstrating all the patterns:
+
+```typescript
+import { ToolCallHeader, ToolBody, ToolFooter } from "@aliou/pi-utils-ui";
+import type {
+  AgentToolResult,
+  ExtensionAPI,
+  ExtensionContext,
+  Theme,
+  ToolRenderResultOptions,
+} from "@mariozechner/pi-coding-agent";
+import { keyHint, formatSize } from "@mariozechner/pi-coding-agent";
+import { Container, Text } from "@mariozechner/pi-tui";
+import { type Static, Type } from "@mariozechner/pi-coding-agent";
+
+// Schema
+const parameters = Type.Object({
+  owner: Type.String({ description: "Repository owner" }),
+  repo: Type.String({ description: "Repository name" }),
+  path: Type.Optional(Type.String({ description: "File or directory path", default: "" })),
+});
+
+// Typed aliases
+type RepoTreeParams = Static<typeof parameters>;
+
+interface RepoTreeDetails {
+  owner: string;
+  repo: string;
+  path: string;
+  entries: Array<{ name: string; type: "file" | "dir"; size?: number }>;
+  truncated: boolean;
+}
+
+// Tool definition
+const repoTreeTool = {
+  name: "repo_tree",
+  label: "Repo Tree",
+  description: "List files and directories in a GitHub repository.",
+  promptSnippet: "Browse repository file structure",
+  promptGuidelines: [
+    "Use this to explore repository structure before reading files",
+    "Start with root path, then drill down into directories",
+  ],
+  parameters,
+
+  async execute(
+    _toolCallId: string,
+    params: RepoTreeParams,
+    signal: AbortSignal | undefined,
+    _onUpdate: undefined,
+    _ctx: ExtensionContext,
+  ): Promise<AgentToolResult<RepoTreeDetails>> {
+    const response = await fetch(
+      `https://api.github.com/repos/${params.owner}/${params.repo}/contents/${params.path ?? ""}`,
+      { signal, headers: { Accept: "application/vnd.github.v3+json" } },
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(
+          `Could not find repository "${params.owner}/${params.repo}" or path "${params.path ?? ""}"`,
+        );
+      }
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+
+    // GitHub returns a single object for files, array for directories
+    const entries = Array.isArray(data) ? data : [data];
+
+    const processed = entries.map((entry: any) => ({
+      name: entry.name,
+      type: entry.type === "dir" ? "dir" as const : "file" as const,
+      size: entry.size,
+    }));
+
+    // Sort: directories first, then files, alphabetically within each
+    processed.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const truncated = processed.length > 100;
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(truncated ? processed.slice(0, 100) : processed, null, 2),
+        },
+      ],
+      details: {
+        owner: params.owner,
+        repo: params.repo,
+        path: params.path ?? "",
+        entries: processed,
+        truncated,
+      },
+    };
+  },
+
+  renderCall(args: RepoTreeParams, theme: Theme) {
+    return new ToolCallHeader(
+      {
+        toolName: "Repo Tree",
+        mainArg: `${args.owner}/${args.repo}`,
+        optionArgs: args.path ? [`path=${args.path}`] : [],
+        longArgs: [],
+      },
+      theme,
+    );
+  },
+
+  renderResult(
+    result: AgentToolResult<RepoTreeDetails>,
+    options: ToolRenderResultOptions,
+    theme: Theme,
+  ) {
+    // 1. Stable partial message
+    if (options.isPartial) {
+      return new Text(theme.fg("muted", "RepoTree: fetching..."), 0, 0);
+    }
+
+    const { details } = result;
+
+    // 2. Error handling: details is {} when tool threw
+    if (!details?.entries) {
+      const textBlock = result.content.find((c) => c.type === "text");
+      const errorMsg = (textBlock?.type === "text" && textBlock.text) || "Failed to list repository";
+      return new Text(theme.fg("error", errorMsg), 0, 0);
+    }
+    const container = new Container();
+    const entries = details?.entries ?? [];
+    const dirs = entries.filter((e) => e.type === "dir");
+    const files = entries.filter((e) => e.type === "file");
+
+    // 3. Body fields with showCollapsed for collapsed/expanded control
+    const fields: Array<{ label: string; value: string; showCollapsed: boolean }> = [
+      {
+        label: "Location",
+        value: `${details.owner}/${details.repo}${details.path ? `/${details.path}` : ""}`,
+        showCollapsed: true,
+      },
+      {
+        label: "Contents",
+        value: `${dirs.length} dirs, ${files.length} files`,
+        showCollapsed: true,
+      },
+    ];
+
+    container.addChild(new ToolBody(theme, { fields, expanded: options.expanded }));
+
+    // 4. Entry list (in expanded view)
+    if (options.expanded && entries.length > 0) {
+      const entryLines = entries
+        .slice(0, 50)
+        .map((e) => {
+          const icon = e.type === "dir" ? "📁" : "📄";
+          const size = e.size !== undefined ? ` (${formatSize(e.size)})` : "";
+          return `${icon} ${e.name}${size}`;
+        })
+        .join("\n");
+
+      container.addChild(new Text(entryLines, 0, 0));
+
+      if (entries.length > 50) {
+        container.addChild(
+          new Text(theme.fg("muted", `... and ${entries.length - 50} more`), 0, 0),
+        );
+      }
+    }
+
+    // 5. Conditional footer
+    const footerItems = [];
+
+    if (details?.truncated) {
+      footerItems.push({ label: "showing", value: "first 100 entries" });
+    }
+
+    if (entries.length > 0) {
+      footerItems.push({ label: "total", value: `${entries.length} items` });
+    }
+
+    if (!options.expanded && entries.length > 5) {
+      footerItems.push({ label: "", value: keyHint("app.tools.expand", "to expand") });
+    }
+
+    if (footerItems.length > 0) {
+      container.addChild(
+        new ToolFooter(theme, {
+          items: footerItems,
+          separator: " | ",
+          includeSpacerBeforeFooter: fields.length > 0,
+        }),
+      );
+    }
+
+    return container;
+  },
+};
+
+export default function (pi: ExtensionAPI) {
+  pi.registerTool(repoTreeTool);
+}
+```

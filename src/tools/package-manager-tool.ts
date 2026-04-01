@@ -12,11 +12,9 @@ import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 const Params = Type.Object({});
-type ParamsType = Record<string, never>;
+type PackageManagerParams = Record<string, never>;
 
 interface PackageManagerDetails {
-  success: boolean;
-  message: string;
   packageManager?: string;
   version?: string;
   lockfile?: string;
@@ -24,8 +22,6 @@ interface PackageManagerDetails {
   runCommand?: string;
   cwd?: string;
 }
-
-type ExecuteResult = AgentToolResult<PackageManagerDetails>;
 
 const LOCKFILES: Record<string, string> = {
   "pnpm-lock.yaml": "pnpm",
@@ -48,136 +44,115 @@ export function setupPackageManagerTool(pi: ExtensionAPI) {
     label: "Package Manager",
     description:
       "Detect the package manager used in the current project by checking lockfiles and package.json",
+    promptSnippet: "Detect the package manager for this project",
+    promptGuidelines: [
+      "Use when you need to know which package manager (npm, yarn, pnpm, bun) the project uses",
+      "Helpful before running install commands or scripts",
+    ],
 
     parameters: Params,
 
     async execute(
       _toolCallId: string,
-      _params: ParamsType,
+      _params: PackageManagerParams,
       _signal: AbortSignal | undefined,
       _onUpdate: unknown,
       ctx: ExtensionContext,
-    ): Promise<ExecuteResult> {
+    ): Promise<AgentToolResult<PackageManagerDetails>> {
       const cwd = ctx.cwd;
 
-      try {
-        const packageJsonPath = path.join(cwd, "package.json");
-        if (!fs.existsSync(packageJsonPath)) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No package.json found in ${cwd}`,
-              },
-            ],
-            details: {
-              success: false,
-              message: `No package.json found in ${cwd}`,
-              cwd,
-            },
-          };
-        }
+      const packageJsonPath = path.join(cwd, "package.json");
+      if (!fs.existsSync(packageJsonPath)) {
+        throw new Error(`No package.json found in ${cwd}`);
+      }
 
-        // Walk up from cwd to repo root, collecting packageManager and lockfile.
-        // Stop at .git boundary to avoid escaping the repository.
-        let declaredPm: string | undefined;
-        let declaredVersion: string | undefined;
-        let lockfile: string | undefined;
-        let lockfilePm: string | undefined;
+      // Walk up from cwd to repo root, collecting packageManager and lockfile.
+      // Stop at .git boundary to avoid escaping the repository.
+      let declaredPm: string | undefined;
+      let declaredVersion: string | undefined;
+      let lockfile: string | undefined;
+      let lockfilePm: string | undefined;
 
-        let searchDir = cwd;
-        while (true) {
-          // Check packageManager field in package.json
-          if (!declaredPm) {
-            const pkgPath = path.join(searchDir, "package.json");
-            try {
-              if (fs.existsSync(pkgPath)) {
-                const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-                if (typeof pkg.packageManager === "string") {
-                  const match = pkg.packageManager.match(/^([^@]+)@?(.*)?$/);
-                  if (match) {
-                    declaredPm = match[1];
-                    declaredVersion = match[2] || undefined;
-                  }
+      let searchDir = cwd;
+      while (true) {
+        // Check packageManager field in package.json
+        if (!declaredPm) {
+          const pkgPath = path.join(searchDir, "package.json");
+          try {
+            if (fs.existsSync(pkgPath)) {
+              const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+              if (typeof pkg.packageManager === "string") {
+                const match = pkg.packageManager.match(/^([^@]+)@?(.*)?$/);
+                if (match) {
+                  declaredPm = match[1];
+                  declaredVersion = match[2] || undefined;
                 }
               }
-            } catch {
-              // Ignore parse errors
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
+        // Check lockfiles
+        if (!lockfilePm) {
+          for (const [filename, pm] of Object.entries(LOCKFILES)) {
+            if (fs.existsSync(path.join(searchDir, filename))) {
+              lockfilePm = pm;
+              lockfile = filename;
+              break;
             }
           }
-
-          // Check lockfiles
-          if (!lockfilePm) {
-            for (const [filename, pm] of Object.entries(LOCKFILES)) {
-              if (fs.existsSync(path.join(searchDir, filename))) {
-                lockfilePm = pm;
-                lockfile = filename;
-                break;
-              }
-            }
-          }
-
-          // Stop if we found both, hit .git, or hit filesystem root
-          if (
-            (declaredPm && lockfilePm) ||
-            fs.existsSync(path.join(searchDir, ".git"))
-          ) {
-            break;
-          }
-          const parent = path.dirname(searchDir);
-          if (parent === searchDir) break;
-          searchDir = parent;
         }
 
-        const pm = declaredPm || lockfilePm || "npm";
-        const fallback = { install: `${pm} install`, run: pm };
-        const commands = COMMANDS[pm] ?? fallback;
-
-        const parts: string[] = [];
-        parts.push(`Package manager: ${pm}`);
-        if (declaredVersion) {
-          parts.push(`Declared version: ${declaredVersion}`);
+        // Stop if we found both, hit .git, or hit filesystem root
+        if (
+          (declaredPm && lockfilePm) ||
+          fs.existsSync(path.join(searchDir, ".git"))
+        ) {
+          break;
         }
-        if (lockfile) {
-          parts.push(`Lockfile: ${lockfile}`);
-        }
-        if (!lockfile && !declaredPm) {
-          parts.push(
-            "No lockfile or packageManager field found, defaulting to npm",
-          );
-        }
-        parts.push(`Install: ${commands.install}`);
-        parts.push(`Run: ${commands.run}`);
-
-        const message = parts.join("\n");
-
-        return {
-          content: [{ type: "text", text: message }],
-          details: {
-            success: true,
-            message,
-            packageManager: pm,
-            version: declaredVersion,
-            lockfile,
-            installCommand: commands.install,
-            runCommand: commands.run,
-            cwd,
-          },
-        };
-      } catch (error) {
-        const message = `Error detecting package manager: ${error instanceof Error ? error.message : String(error)}`;
-        return {
-          content: [{ type: "text", text: message }],
-          details: {
-            success: false,
-            message,
-            cwd,
-          },
-        };
+        const parent = path.dirname(searchDir);
+        if (parent === searchDir) break;
+        searchDir = parent;
       }
+
+      const pm = declaredPm || lockfilePm || "npm";
+      const fallback = { install: `${pm} install`, run: pm };
+      const commands = COMMANDS[pm] ?? fallback;
+
+      const parts: string[] = [];
+      parts.push(`Package manager: ${pm}`);
+      if (declaredVersion) {
+        parts.push(`Declared version: ${declaredVersion}`);
+      }
+      if (lockfile) {
+        parts.push(`Lockfile: ${lockfile}`);
+      }
+      if (!lockfile && !declaredPm) {
+        parts.push(
+          "No lockfile or packageManager field found, defaulting to npm",
+        );
+      }
+      parts.push(`Install: ${commands.install}`);
+      parts.push(`Run: ${commands.run}`);
+
+      const message = parts.join("\n");
+
+      return {
+        content: [{ type: "text", text: message }],
+        details: {
+          packageManager: pm,
+          version: declaredVersion,
+          lockfile,
+          installCommand: commands.install,
+          runCommand: commands.run,
+          cwd,
+        },
+      };
     },
 
-    renderCall(_args: ParamsType, theme: Theme) {
+    renderCall(_args: PackageManagerParams, theme: Theme) {
       return new ToolCallHeader({ toolName: "Detect Package Manager" }, theme);
     },
 
@@ -188,24 +163,22 @@ export function setupPackageManagerTool(pi: ExtensionAPI) {
     ): Text {
       const { details } = result;
 
-      if (!details) {
+      // Check for missing expected fields (framework passes {} on error)
+      if (!details?.packageManager) {
+        // Extract error message from result.content
         const text = result.content[0];
-        return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
-          0,
-          0,
-        );
-      }
-
-      if (!details.success) {
-        return new Text(theme.fg("error", details.message), 0, 0);
+        const errorMessage =
+          text?.type === "text" && text.text
+            ? text.text
+            : "Failed to detect package manager";
+        return new Text(theme.fg("error", errorMessage), 0, 0);
       }
 
       const lines: string[] = [];
       lines.push(
         theme.fg(
           "success",
-          `Package manager: ${theme.bold(details.packageManager || "unknown")}`,
+          `Package manager: ${theme.bold(details.packageManager)}`,
         ),
       );
       if (details.version) {

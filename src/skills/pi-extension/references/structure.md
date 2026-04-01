@@ -11,7 +11,15 @@ my-extension/
     config.ts             # Config schema (types) + loader + defaults
     client.ts             # API client (if wrapping a third-party API)
     tools/
-      my-tool.ts          # One file per tool
+      my-tool.ts          # One file per tool (simple tool)
+      my-multi-tool/      # Multi-action tool
+        index.ts           # Tool registration + renderCall/renderResult
+        actions/           # One file per action
+          create.ts
+          list.ts
+          show.ts
+        render.ts          # Separate render module (when rendering is complex)
+        types.ts           # Serialized types for tool details
     commands/
       my-command.ts        # One file per command
     components/
@@ -39,6 +47,8 @@ Not every extension needs every directory. A simple extension with one tool migh
 - **Config types live in `config.ts`**, not a separate `types.ts` or `config-schema.ts`. The config file exports both the types (raw and resolved) and the config loader instance.
 - **Utility/helper files** go in `utils/`. This includes pattern matching, shell parsing, event helpers, migrations, etc. Anything that is not a tool, command, component, provider, or hook.
 - **No separate `types.ts`** unless the extension has shared types unrelated to config (rare). Config types are the most common shared types, and they belong in `config.ts`.
+- **Multi-action tools** get their own directory under `tools/`. The tool registration + rendering lives in `index.ts`, each action gets its own file in `actions/`, and complex rendering logic goes in `render.ts`. Serialized types for tool details go in `types.ts`.
+- **Core/domain logic** lives in dedicated modules at the `src/` root (`client.ts`, `manager.ts`). These contain the business logic, are testable without the Pi framework, and don't import from `@mariozechner/pi-coding-agent`. Tools are thin wrappers that call these modules and format results.
 
 ## package.json
 
@@ -297,6 +307,100 @@ export const configLoader = new ConfigLoader<MyExtensionConfig, ResolvedMyExtens
   },
 );
 ```
+
+### Config Migrations
+
+For evolving config shape across versions, pass named migrations to `ConfigLoader`:
+
+```typescript
+import { ConfigLoader, type Migration, buildSchemaUrl } from "@aliou/pi-utils-settings";
+import pkg from "../package.json" with { type: "json" };
+
+const legacyMigration: Migration<MyExtensionConfig> = {
+  name: "legacy-flat-key-to-nested",
+  shouldRun: (config) => Boolean(config.apiKey && !config.workspaces),
+  run: (config) => {
+    const migrated = structuredClone(config);
+    migrated.workspaces = { default: { apiKey: config.apiKey } };
+    delete migrated.apiKey;
+    return migrated;
+  },
+};
+
+const schemaUrl = buildSchemaUrl(pkg.name, pkg.version);
+
+export const configLoader = new ConfigLoader<MyConfig, ResolvedMyConfig>(
+  "my-extension",
+  DEFAULTS,
+  {
+    schemaUrl,
+    migrations: [legacyMigration],
+  },
+);
+```
+
+Each migration has:
+- `name`: unique identifier for idempotency
+- `shouldRun(config)`: predicate that returns true if migration is needed
+- `run(config)`: returns the migrated config (must not mutate the input)
+
+### JSON Schema for Config Validation
+
+Use `buildSchemaUrl(pkg.name, pkg.version)` from `@aliou/pi-utils-settings` to generate a schema URL. Config files get a `$schema` field pointing to the published schema, enabling editor validation and autocompletion.
+
+## Settings Command
+
+Extensions with user-configurable settings use `registerSettingsCommand` from `@aliou/pi-utils-settings` to create a settings UI with Local/Global tabs:
+
+```typescript
+import { registerSettingsCommand, type SettingsSection } from "@aliou/pi-utils-settings";
+
+registerSettingsCommand<MyConfig, ResolvedMyConfig>(pi, {
+  commandName: "my-extension:settings",
+  commandDescription: "Configure my extension",
+  title: "My Extension Settings",
+  configStore: configLoader,
+  onSave: () => { /* invalidate caches */ },
+  buildSections: (tabConfig, resolved, ctx): SettingsSection[] => [
+    {
+      label: "General",
+      items: [
+        {
+          id: "enabled",
+          label: "Enabled",
+          description: "Enable or disable the extension",
+          currentValue: (tabConfig?.enabled ?? resolved.enabled) ? "enabled" : "disabled",
+          values: ["enabled", "disabled"],
+        },
+      ],
+    },
+  ],
+});
+```
+
+For complex nested config (workspaces, profiles), use `submenu` fields with `SettingsDetailEditor` or `FuzzySelector` components. See `pi-linear/src/commands/settings.ts` for a full example.
+
+### Auth Wizard
+
+For extensions requiring API credentials, use the `Wizard` component from `@aliou/pi-utils-settings` for multi-step onboarding:
+
+```typescript
+import { Wizard, FuzzySelector, type WizardStepContext } from "@aliou/pi-utils-settings";
+
+const wizard = new Wizard({
+  title: "My Auth",
+  theme,
+  steps: [
+    { label: "Key", build: (ctx) => new ApiKeyStep(state, ctx) },
+    { label: "Validate", build: (ctx) => new ValidateStep(state, ctx) },
+    { label: "Scope", build: (ctx) => new ScopeStep(state, ctx) },
+  ],
+  onComplete: async () => { /* save config */ },
+  onCancel: () => done(false),
+});
+```
+
+Each step receives a `WizardStepContext` with `markComplete()`/`markIncomplete()` to control navigation gates. See `pi-linear/src/commands/auth-wizard.ts` for a full example with async validation and spinner.
 
 ## Entry Point (src/index.ts)
 

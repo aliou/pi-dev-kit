@@ -127,6 +127,41 @@ Extensions that add tools or behavioral patterns the agent may not know how to u
 - The tool description alone is self-explanatory
 - The tool has no plausible bash alternative
 
+---
+
+There are two ways to inject guidance, depending on complexity:
+
+#### Tier 1: Per-Tool Metadata (Preferred for Simple Tools)
+
+For most tools, use the SDK-level `promptSnippet` and `promptGuidelines` fields directly on the tool definition. No hook is needed.
+
+- **`promptSnippet`** — Injected into the "Available tools" system prompt section. Use for a concise (1–2 sentence) description of when to prefer this tool.
+- **`promptGuidelines`** — Appended to the "Guidelines" section. Use for a short list of usage rules.
+
+```typescript
+const myTool = {
+  name: "my_tool",
+  label: "My Tool",
+  description: "...",
+  promptSnippet: "Manage background processes without blocking the conversation.",
+  promptGuidelines: [
+    "Use this tool for long-running commands instead of bash.",
+    "After starting a process, continue other work instead of waiting.",
+  ],
+  parameters: ...,
+  execute: ...,
+};
+```
+
+This is the simplest approach and works well when guidance is specific to a single tool.
+
+#### Tier 2: System Prompt Hook (For Complex Cross-Tool Orchestration)
+
+Use the `before_agent_start` hook when:
+- Guidance involves **cross-tool workflow instructions** (e.g. "use tool A, then tool B, then tool C")
+- You need **dynamic context from config** (e.g. workspace names, team keys, feature flags)
+- The per-tool metadata fields aren't expressive enough
+
 **Structure: three files**
 
 `src/guidance.ts` — the guidance text as a named export:
@@ -187,6 +222,8 @@ export interface MyExtensionConfig {
 
 Call `registerGuidance(pi)` from your hooks setup function.
 
+---
+
 **What makes guidance effective:**
 
 - Lead with the decision rule: **when to use AND when not to use**. The when-not-to-use is as important — it gives the agent permission to keep using `bash` for quick tasks and prevents overcorrection.
@@ -195,7 +232,10 @@ Call `registerGuidance(pi)` from your hooks setup function.
 - Keep the guidance section header (`## My Extension`) so it reads as a named capability, not a restriction.
 - Avoid stacking emphasis markers (`NEVER`, `ALWAYS`, `IMPORTANT`). One or two land; more are ignored.
 
-**Reference implementations:** `pi-linkup` (`src/hooks/system-prompt.ts`, `src/guidance.ts`) and `pi-processes` (`src/hooks/system-prompt.ts`, `src/guidance.ts`).
+**Reference implementations:**
+- `pi-linkup` — Uses per-tool `promptSnippet`/`promptGuidelines` (simple tools, no hook needed).
+- `pi-linear` — Uses `guidance.ts` + `before_agent_start` hook (cross-tool workflow instructions + dynamic workspace context).
+- `pi-processes` — Uses both: `promptSnippet`/`promptGuidelines` on tools for basic guidance, plus system prompt hook for complex multi-tool orchestration patterns.
 
 ## Compaction
 

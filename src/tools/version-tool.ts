@@ -14,18 +14,18 @@ const VersionParams = Type.Object({});
 type VersionParamsType = Record<string, never>;
 
 interface VersionDetails {
-  success: boolean;
-  message: string;
-  version: string;
+  version?: string;
 }
-
-type ExecuteResult = AgentToolResult<VersionDetails>;
 
 export function setupVersionTool(pi: ExtensionAPI) {
   pi.registerTool<typeof VersionParams, VersionDetails>({
     name: "pi_version",
     label: "Pi Version",
     description: "Get the version of the currently running Pi instance",
+    promptSnippet: "Check the current Pi version.",
+    promptGuidelines: [
+      "Use when the user asks about the Pi version or when a task depends on knowing the installed version.",
+    ],
 
     parameters: VersionParams,
 
@@ -35,15 +35,10 @@ export function setupVersionTool(pi: ExtensionAPI) {
       _signal: AbortSignal | undefined,
       _onUpdate: unknown,
       _ctx: ExtensionContext,
-    ): Promise<ExecuteResult> {
-      const message = `Pi version ${VERSION}`;
+    ): Promise<AgentToolResult<VersionDetails>> {
       return {
-        content: [{ type: "text", text: message }],
-        details: {
-          success: true,
-          message,
-          version: VERSION,
-        },
+        content: [{ type: "text", text: `Pi version ${VERSION}` }],
+        details: { version: VERSION },
       };
     },
 
@@ -58,13 +53,11 @@ export function setupVersionTool(pi: ExtensionAPI) {
     ): Text {
       const { details } = result;
 
-      if (!details) {
-        const text = result.content[0];
-        return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
-          0,
-          0,
-        );
+      if (!details?.version) {
+        const textBlock = result.content.find((c) => c.type === "text");
+        const msg =
+          (textBlock?.type === "text" && textBlock.text) || "Unknown version";
+        return new Text(theme.fg("error", msg), 0, 0);
       }
 
       return new Text(
