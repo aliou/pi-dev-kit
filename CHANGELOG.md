@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.6.1
+
+### Patch Changes
+
+- c12edf9: Update Pi package peer/dev dependency versions to 0.65.2 and refresh shipped extension guidance for current session lifecycle and state reconstruction APIs.
+
 ## 0.6.0
 
 ### Minor Changes
