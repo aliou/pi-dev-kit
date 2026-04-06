@@ -11,10 +11,10 @@ Guide for creating and maintaining Pi extensions. Read the relevant reference fi
 
 Pi injects these packages via jiti at runtime. Extensions do not need to install them — they are available as peer dependencies:
 
-- `@mariozechner/pi-coding-agent` — core types, utilities, `Type`/`Static` (re-exported from TypeBox)
+- `@mariozechner/pi-coding-agent` — core types, utilities, and extension APIs
 - `@mariozechner/pi-tui` — TUI components
 - `@mariozechner/pi-ai` — AI utilities (`StringEnum`, etc.)
-- `@sinclair/typebox` — schema definitions (also re-exported from `pi-coding-agent`, prefer the re-export)
+- `@sinclair/typebox` — schema definitions for tool parameters and related types
 
 ```typescript
 // Tool UI components (from @aliou/pi-utils-ui)
@@ -109,7 +109,7 @@ When implementing, look at these existing extensions for patterns:
 13. **Output truncation**: For tools returning large text, use `truncateHead()` from `@mariozechner/pi-coding-agent`. Write full content to temp file. Append footer with line/byte counts and temp file path.
 14. **Core/lib pattern**: Extract domain logic into modules (`client.ts`, `manager.ts`) that don't import from Pi. Tools are thin wrappers. Core modules are unit-testable with vitest.
 15. **Humanize messages**: Show display names first, IDs in dim/parens. `"Started \"backend\" (proc_42)"` not `"Started proc_42"`.
-16. **peerDependencies**: Pi injects `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`, and `@sinclair/typebox` via jiti at runtime. Any of these that your extension imports must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta`. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`. Prefer importing `Type`/`Static` from `@mariozechner/pi-coding-agent` rather than `@sinclair/typebox` directly.
+16. **peerDependencies**: Pi injects `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`, and `@sinclair/typebox` via jiti at runtime. Any of these that your extension imports must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta`. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`.
 17. **Check existing components**: Before creating a new TUI component, check if `pi-tui` or `pi-coding-agent` already exports one that fits.
 18. **Forward abort signals**: Always pass `signal` through to `fetch()`, `pi.exec()`, and API client methods. A tool that ignores its signal prevents cancellation from reaching the underlying operation. Never prefix with `_signal` unless the tool truly has no async work to cancel.
 19. **Never use Node child_process APIs**: Do not use `child_process.exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, or `execFileSync` to run binaries or shell scripts. Always use `pi.exec()`. `pi.exec` handles CWD, signal propagation, and output capture consistently. The only exception is if you need a long-lived streaming process with stdin/stdout piping that `pi.exec` cannot support — document the reason in code comments.

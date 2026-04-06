@@ -135,10 +135,10 @@ Only include `pi` sub-fields that are actually used. `skills`, `themes`, `prompt
 
 **`peerDependencies`**: Declares the minimum pi version required. Pi ships these packages and injects them via jiti at runtime, so extensions never need to install them:
 
-- `@mariozechner/pi-coding-agent` — core types, utilities, `Type` (re-exported from TypeBox)
+- `@mariozechner/pi-coding-agent` — core types, utilities, and extension APIs
 - `@mariozechner/pi-tui` — TUI components
 - `@mariozechner/pi-ai` — AI utilities (`StringEnum`, etc.)
-- `@sinclair/typebox` — schema definitions (also re-exported from `pi-coding-agent`)
+- `@sinclair/typebox` — schema definitions for tool parameters and related types
 
 List any of these you import at runtime in `peerDependencies` as optional peers. This prevents npm from installing duplicate copies when a user installs your extension. Use `>=` with the current version when creating.
 
