@@ -8,13 +8,11 @@ Hooks let extensions react to lifecycle events. They are registered with `pi.on(
 
 | Event | When | Can Cancel | Payload |
 |---|---|---|---|
-| `session_start` | New session created | No | `{}` |
-| `session_switch` | Switched to different session | No | `{ reason: "new" \| "switch" \| "fork" }` |
-| `session_before_switch` | Before switching sessions | Yes (`{ cancel: true }`) | `{ reason: "new" \| "switch" \| "fork" }` |
-| `session_before_fork` | Before forking a session | Yes (`{ cancel: true }`) | `{}` |
-| `session_fork` | After session was forked | No | `{}` |
-| `session_shutdown` | Pi is shutting down | No | `{}` |
-| `session_before_compact` | Before compaction | Yes (return custom summary string) | `{ summary: string }` |
+| `session_start` | Session starts, reloads, or is replaced | No | `{ reason: "startup" \| "reload" \| "new" \| "resume" \| "fork", previousSessionFile? }` |
+| `session_before_switch` | Before `/new` or `/resume` replaces the current session | Yes (`{ cancel: true }`) | `{ reason: "new" \| "resume", targetSessionFile? }` |
+| `session_before_fork` | Before forking a session | Yes (`{ cancel: true }`) | `{ entryId }` |
+| `session_shutdown` | Current session runtime is shutting down or being replaced | No | `{}` |
+| `session_before_compact` | Before compaction | Yes (cancel or provide custom compaction) | event-specific compaction data |
 
 ### Agent Events
 
@@ -98,8 +96,13 @@ pi.on("session_before_switch", async (event, ctx) => {
 
 ```typescript
 pi.on("session_before_compact", async (event, ctx) => {
-  // Return a custom summary string to replace the default compaction
-  return `Custom summary: ${event.summary.slice(0, 200)}...`;
+  return {
+    compaction: {
+      summary: "Custom summary",
+      firstKeptEntryId: event.preparation.firstKeptEntryId,
+      tokensBefore: event.preparation.tokensBefore,
+    },
+  };
 });
 ```
 
