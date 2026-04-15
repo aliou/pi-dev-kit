@@ -53,7 +53,7 @@ import { Container, Markdown, Text } from "@mariozechner/pi-tui";
 6. If the extension tracks state: Read `references/state.md`.
 7. For less common APIs: Read `references/additional-apis.md`.
 8. If the extension has user-configurable settings: Use `registerSettingsCommand` from `@aliou/pi-utils-settings`. Read `references/structure.md` for settings command and auth wizard patterns.
-9. If the extension adds a tool that competes with a natural bash fallback: use `promptSnippet` and `promptGuidelines` on the tool definition for simple guidance. Use system prompt hooks only for complex cross-tool orchestration. Read the **Guidance** section in `references/additional-apis.md`.
+9. If the extension adds a tool that competes with a natural bash fallback: use `promptSnippet` and `promptGuidelines` on the tool definition for simple guidance. Write `promptGuidelines` as standalone bullets that name the exact tool, because pi injects them verbatim into the shared global `Guidelines` section. Use system prompt hooks only for complex cross-tool orchestration. Read the **Guidance** section in `references/additional-apis.md`.
 10. Before publishing: Read `references/publish.md` and `references/documentation.md`.
 
 ### Modifying an Existing Extension
@@ -68,11 +68,11 @@ import { Container, Markdown, Text } from "@mariozechner/pi-tui";
 | File | Content |
 |---|---|
 | `references/structure.md` | Project layout, package.json, tsconfig, biome.json, config.ts, entry point patterns (including acceptable exceptions), API key pattern, imports |
-| `references/tools.md` | Tool registration, execute signature, parameters, streaming, rendering, naming, renderCall/renderResult UI guidelines |
+| `references/tools.md` | Tool registration, execute signature, parameters, `prepareArguments`, path normalization, file mutation queueing, streaming, rendering, naming, renderCall/renderResult UI guidelines |
 | `references/hooks.md` | Events, blocking/cancelling, input transformation, system prompt modification, bash spawn hooks (command rewriting) |
 | `references/commands.md` | Command registration, three-tier pattern, component extraction |
 | `references/components.md` | TUI components (pi-tui + pi-coding-agent), custom(), theme styling, keyboard handling |
-| `references/providers.md` | Provider registration, model definition, compat field, API key gating |
+| `references/providers.md` | Current `pi.registerProvider(name, config)` API, model definition, provider override/registration patterns, API key gating |
 | `references/modes.md` | Mode behavior matrix, ctx.hasUI, dialog vs fire-and-forget, three-tier pattern |
 | `references/messages.md` | sendMessage, registerMessageRenderer, notify, when to use each |
 | `references/state.md` | appendEntry, state reconstruction, appendEntry vs sendMessage |
@@ -105,7 +105,7 @@ When implementing, look at these existing extensions for patterns:
 9. **Long args placement**: Put long prompt/task/question/context strings on following lines. Keep first line scannable.
 10. **Result layout**: In `renderResult(result, options, theme)`, handle `isPartial` first with a stable tool-scoped message. Detect errors by checking for missing expected fields in `details` (framework sets `details: {}` on throw). Use `ToolBody` from `@aliou/pi-utils-ui` with `showCollapsed` fields. Use `ToolFooter` conditionally (omit when empty). Use `Container`/`Markdown` for rich content.
 11. **Typed param alias**: Define `type MyToolParams = Static<typeof parameters>` at the top of each tool file. Use it everywhere instead of repeating `Static<typeof parameters>`.
-12. **Tool metadata**: Every tool must have `label` (required). Add `promptSnippet` for system prompt tool listing. Add `promptGuidelines` for usage instructions. These replace system-prompt hooks for simple tools.
+12. **Tool metadata**: Every tool must have `label` (required). Add `promptSnippet` for system prompt tool listing. Add `promptGuidelines` for usage instructions, but write them as standalone global bullets that name the exact tool. These replace system-prompt hooks for simple tools.
 13. **Output truncation**: For tools returning large text, use `truncateHead()` from `@mariozechner/pi-coding-agent`. Write full content to temp file. Append footer with line/byte counts and temp file path.
 14. **Core/lib pattern**: Extract domain logic into modules (`client.ts`, `manager.ts`) that don't import from Pi. Tools are thin wrappers. Core modules are unit-testable with vitest.
 15. **Humanize messages**: Show display names first, IDs in dim/parens. `"Started \"backend\" (proc_42)"` not `"Started proc_42"`.
@@ -133,9 +133,12 @@ Before considering an extension complete:
 - [ ] `renderResult` uses `ToolBody` with `showCollapsed` fields.
 - [ ] `renderResult` uses `ToolFooter` conditionally (omits when empty).
 - [ ] Every tool has `label` field.
-- [ ] Tools have `promptSnippet` and/or `promptGuidelines` when appropriate.
+- [ ] Tools have `promptSnippet` and/or `promptGuidelines` when appropriate, and `promptGuidelines` bullets name the exact tool instead of saying `this tool`.
 - [ ] Large output tools use `truncateHead()` + temp file pattern.
 - [ ] Domain logic is extracted to testable core modules.
+- [ ] File-mutating custom tools use `withFileMutationQueue()` for the full read-modify-write window.
+- [ ] Path-taking custom tools normalize a leading `@` before resolving paths.
+- [ ] Tool overrides re-declare `promptSnippet`/`promptGuidelines` if they need inherited prompt behavior.
 - [ ] `ctx.ui.custom()` calls have RPC fallback, and interactive close/cancel paths do not rely on `done(undefined)` when fallback detection uses `result === undefined`.
 - [ ] `tool_call` hooks check `ctx.hasUI` before dialog methods.
 - [ ] Fire-and-forget methods (notify, setStatus, etc.) are used without hasUI guards.

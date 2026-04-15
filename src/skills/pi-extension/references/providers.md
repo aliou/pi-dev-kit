@@ -1,134 +1,159 @@
 # Providers
 
-Providers add LLM backends to pi. They connect pi to model APIs (OpenAI-compatible or custom).
+Providers add LLM backends to pi. They connect pi to model APIs, proxies, gateways, and custom streaming implementations.
+
+This reference tracks the current `pi.registerProvider(name, config)` API from pi-mono. For full provider details and advanced examples, also read pi-mono `packages/coding-agent/docs/custom-provider.md`.
 
 ## Registration
 
 ```typescript
-import { Type, type ExtensionAPI, type ProviderDefinition } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ProviderConfig } from "@mariozechner/pi-coding-agent";
 
-const myProvider: ProviderDefinition = {
-  name: "my-provider",
-  models: () => {
-    const apiKey = process.env.MY_API_KEY;
-    if (!apiKey) return [];
-
-    return [
-      {
-        id: "my-provider/model-name",
-        name: "Model Name",
-        provider: "my-provider",
-        canStream: true,
-        contextLength: 128000,
-        maxOutputTokens: 8192,
-        pricing: { inputPerMillion: 3.0, outputPerMillion: 15.0 },
-        compat: {
-          type: "openai-completions",
-          maxTokensField: "max_tokens",
-          supportsDeveloperRole: false,
-        },
-      },
-    ];
-  },
-  apiKey: () => process.env.MY_API_KEY,
-  baseUrl: () => "https://api.my-provider.com/v1",
+const myProviderConfig: ProviderConfig = {
+  baseUrl: "https://api.example.com/v1",
+  apiKey: "MY_API_KEY",
+  api: "openai-completions",
+  models: [
+    {
+      id: "my-model",
+      name: "My Model",
+      reasoning: false,
+      input: ["text", "image"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128000,
+      maxTokens: 4096,
+    },
+  ],
 };
 
 export default function (pi: ExtensionAPI) {
-  pi.registerProvider(myProvider);
+  pi.registerProvider("my-provider", myProviderConfig);
 }
 ```
 
-## Provider Definition
+## Common Registration Patterns
+
+### Override an existing provider
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerProvider("anthropic", {
+    baseUrl: "https://proxy.example.com",
+  });
+}
+```
+
+Use this when you want to keep the built-in provider and model list, but change the endpoint and/or headers.
+
+### Register a new provider
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+
+export default function (pi: ExtensionAPI) {
+  pi.registerProvider("my-provider", {
+    baseUrl: "https://api.example.com/v1",
+    apiKey: "MY_API_KEY",
+    api: "openai-completions",
+    models: [
+      {
+        id: "my-model",
+        name: "My Model",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0.5, output: 1.5, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 8192,
+      },
+    ],
+  });
+}
+```
+
+### Unregister a provider
+
+```typescript
+pi.unregisterProvider("my-provider");
+```
+
+This takes effect immediately at runtime.
+
+## ProviderConfig Fields
 
 | Field | Type | Description |
 |---|---|---|
-| `name` | `string` | Unique provider identifier. Used as prefix in model IDs. |
-| `models` | `() => ProviderModelConfig[]` | Returns available models. Called when pi needs the model list. Return `[]` if the API key is missing. |
-| `apiKey` | `() => string \| undefined` | Returns the API key. Pi calls this when making requests. |
-| `baseUrl` | `() => string \| undefined` | Returns the base URL for the API. |
+| `baseUrl` | `string` | Base URL for the provider or proxy. |
+| `headers` | `Record<string, string>` | Optional static headers to add to requests. |
+| `apiKey` | `string` | Environment variable name containing the API key. |
+| `api` | `"openai-completions" \| "openai-responses"` | Compatibility mode for request/response handling. |
+| `models` | `ProviderModelConfig[]` | Model definitions exposed by this provider. |
+| `streamSimple` | `function` | Optional custom streaming implementation for non-standard APIs. |
+| `oauth` | `object` | Optional OAuth config for providers that need browser-based auth. |
 
-The `models` function is the right place to check for API key presence. If the key is missing, return an empty array and the provider will appear registered but offer no models.
+Use the built-in OpenAI-compatible path when possible. Reach for `streamSimple` only when the upstream API is not compatible enough.
 
 ## Model Definition
 
+The exact model type has more fields, but these are the ones you will usually need:
+
 | Field | Type | Description |
 |---|---|---|
-| `id` | `string` | Unique model ID. Convention: `provider/model-name`. |
-| `name` | `string` | Display name shown in model picker. |
-| `provider` | `string` | Must match the provider's `name`. |
-| `canStream` | `boolean` | Whether the model supports streaming responses. |
-| `contextLength` | `number` | Maximum context window in tokens. |
-| `maxOutputTokens` | `number` | Maximum output tokens per response. |
-| `pricing` | `object` | `{ inputPerMillion, outputPerMillion }` in USD. Used for cost display. |
-| `compat` | `object` | OpenAI compatibility settings. See below. |
+| `id` | `string` | Model identifier within the provider config. |
+| `name` | `string` | Display name shown in model selection UI. |
+| `reasoning` | `boolean` | Whether the model is a reasoning model. |
+| `input` | `Array<"text" \| "image" \| "audio" \| "pdf">` | Input modalities supported by the model. |
+| `cost` | `object` | `{ input, output, cacheRead, cacheWrite }` cost values. |
+| `contextWindow` | `number` | Maximum context window. |
+| `maxTokens` | `number` | Maximum output tokens. |
 
-## Compat Field
+## API Key Gating
 
-The `compat` field tells pi how to talk to the model's API. Most third-party APIs are OpenAI-compatible but differ in which features they support.
+Provider registration and extension tool registration are separate concerns.
 
-```typescript
-compat: {
-  type: "openai-completions",
+For providers:
+- Register the provider with `pi.registerProvider(name, config)`.
+- Point `apiKey` at the environment variable name that holds the credential.
+- If the provider should exist even when tools are disabled, still register it.
 
-  // Which field name the API uses for max output tokens
-  maxTokensField: "max_tokens" | "max_completion_tokens",
-
-  // Whether the API supports the 'developer' role (vs 'system')
-  supportsDeveloperRole: boolean,
-
-  // Whether the API supports the 'store' parameter
-  supportsStore: boolean,
-
-  // Whether the API supports reasoning_effort parameter
-  supportsReasoningEffort: boolean,
-
-  // Whether usage stats are included in streaming responses
-  supportsUsageInStreaming: boolean,
-
-  // Whether tool results must include a 'name' field
-  requiresToolResultName: boolean,
-
-  // Whether an assistant message is required after tool results
-  requiresAssistantAfterToolResult: boolean,
-
-  // Whether thinking/reasoning must be sent as text content
-  requiresThinkingAsText: boolean,
-
-  // Mistral-specific tool ID requirements
-  requiresMistralToolIds: boolean,
-
-  // Format for thinking/reasoning blocks
-  thinkingFormat: "openai" | "zai" | "qwen",
-
-  // OpenRouter-specific routing hints
-  openRouterRouting: object,
-
-  // Vercel AI Gateway routing
-  vercelGatewayRouting: object,
-}
-```
-
-All fields in `compat` are optional except `type`. Start with the minimum and add fields as needed based on API behavior.
-
-There is also `type: "openai-responses"` for providers using the OpenAI Responses API, which currently has no additional compat fields.
-
-## Provider with API Key Gate
-
-Register the provider unconditionally but gate tools/commands on the API key:
+For tools and commands that require the same credential:
+- Gate those registrations separately in your extension entry point.
 
 ```typescript
 export default function (pi: ExtensionAPI) {
-  // Provider always registered -- models() returns [] if no key
-  pi.registerProvider(myProvider);
+  pi.registerProvider("my-provider", {
+    baseUrl: "https://api.example.com/v1",
+    apiKey: "MY_API_KEY",
+    api: "openai-completions",
+    models: [
+      {
+        id: "my-model",
+        name: "My Model",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096,
+      },
+    ],
+  });
 
-  const apiKey = process.env.MY_API_KEY;
-  if (!apiKey) return;
+  if (!process.env.MY_API_KEY) return;
 
-  // Only register tools that need the key
-  pi.registerTool(createSearchTool(apiKey));
-  pi.registerCommand(createQuotasCommand(apiKey));
+  pi.registerTool(mySearchTool);
+  pi.registerCommand("quota", { handler: showQuota });
 }
 ```
 
-This way the provider appears in pi's provider list even without a key, and users see a clear "no models available" state rather than a missing provider.
+That pattern keeps provider setup accurate while still hiding tools that cannot work without credentials.
+
+## When to read the upstream docs
+
+Also read pi-mono `packages/coding-agent/docs/custom-provider.md` when you need:
+- custom streaming via `streamSimple`
+- OAuth support
+- proxying existing providers
+- header injection
+- provider teardown with `pi.unregisterProvider()`
+- advanced model config details

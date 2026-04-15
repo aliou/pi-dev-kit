@@ -18,7 +18,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { getMarkdownTheme, keyHint, truncateHead, formatSize } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@mariozechner/pi-coding-agent";
+import { type Static, Type } from "@sinclair/typebox";
 ```
 
 ## Registration
@@ -29,9 +29,9 @@ const myTool = {
   label: "My Tool", // Required: human-readable name for UI
   description: "What this tool does. The LLM reads this to decide when to call it.",
   promptSnippet: "Search for items by query", // One-liner for "Available tools" system prompt
-  promptGuidelines: [ // Guideline bullets for "Guidelines" system prompt when active
-    "Use this tool when the user asks about search",
-    "Prefer specific queries over broad ones",
+  promptGuidelines: [ // Guideline bullets appended verbatim to the global "Guidelines" section when this tool is active
+    "Use my_tool when the user asks about search.",
+    "Prefer specific queries over broad ones when calling my_tool.",
   ],
   parameters: Type.Object({
     query: Type.String({ description: "Search query" }),
@@ -73,7 +73,7 @@ export default function (pi: ExtensionAPI) {
 | `description` | `string` | Yes | What the tool does (LLM reads this) |
 | `parameters` | `TSchema` | Yes | TypeBox schema for arguments |
 | `promptSnippet` | `string` | No | One-liner injected into "Available tools" system prompt. Custom tools without this are omitted from that section. |
-| `promptGuidelines` | `string[]` | No | Guideline bullets appended to "Guidelines" system prompt when this tool is active |
+| `promptGuidelines` | `string[]` | No | Guideline bullets appended verbatim to the global "Guidelines" system prompt section when this tool is active. Write each bullet so it still makes sense standalone. |
 | `execute` | `function` | Yes | Implementation |
 | `renderCall` | `function` | No | Custom call rendering |
 | `renderResult` | `function` | No | Custom result rendering |
@@ -117,6 +117,8 @@ The `onUpdate` parameter can be `undefined`. Calling it without optional chainin
 ## Tool Overrides and Delegation
 
 If you override a built-in tool or wrap another tool, audit any delegated `tool.execute(...)` calls during upgrades. These forwarders often pass through `signal`, `onUpdate`, or `ctx` and can silently break when the execute signature changes. Always recheck the delegate call parameter order and include optional parameters that the target tool expects.
+
+Prompt metadata is not inherited automatically when you override a built-in tool. If the original tool had `promptSnippet` or `promptGuidelines` and you still want that system prompt behavior, define those fields explicitly on the override.
 
 ## Return Value
 
@@ -222,7 +224,7 @@ Both approaches work. Approach 1 is more common in published extensions. Approac
 Use TypeBox (`Type.*`) for parameter schemas. The LLM sees the schema to know what arguments to provide.
 
 ```typescript
-import { Type } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
 
 // Required string
 Type.String({ description: "File path to read" })
@@ -247,6 +249,89 @@ Type.Array(Type.String(), { description: "List of tags" })
 ```
 
 Always provide `description` on parameters. The LLM uses these to understand what to pass.
+
+## Prompt Metadata
+
+`promptSnippet` and `promptGuidelines` affect different parts of the default system prompt:
+
+- `promptSnippet` adds a one-line entry to `Available tools`.
+- `promptGuidelines` appends raw bullets to the global `Guidelines` section.
+
+Important implications:
+
+- `promptGuidelines` bullets are not wrapped with the tool name.
+- Write bullets so they still make sense when read out of context.
+- Prefer explicit tool names over phrases like `this tool`.
+
+Good:
+
+```typescript
+promptGuidelines: [
+  "Use my_tool to search project docs before broader web research.",
+  "Prefer specific queries when calling my_tool.",
+]
+```
+
+Weak:
+
+```typescript
+promptGuidelines: [
+  "Use this tool for docs.",
+  "Prefer specific queries.",
+]
+```
+
+Use `promptGuidelines` for short, tool-local rules. If the guidance needs cross-tool sequencing, comparisons against several tools, or dynamic config context, use a `before_agent_start` hook instead.
+
+## Argument Compatibility and Path Handling
+
+Use `prepareArguments(args)` when you need a compatibility shim before schema validation, for example to support an old parameter shape during a migration.
+
+```typescript
+prepareArguments(args) {
+  if (!args || typeof args !== "object") return args;
+  const input = args as { action?: string; oldAction?: string };
+  if (typeof input.oldAction === "string" && input.action === undefined) {
+    return { ...input, action: input.oldAction };
+  }
+  return args;
+}
+```
+
+If your custom tool accepts filesystem paths, normalize a leading `@` before resolving the path. Some models include `@` in path arguments, and the built-in file tools already strip it.
+
+```typescript
+const normalizedPath = params.path.startsWith("@") ? params.path.slice(1) : params.path;
+```
+
+## File-Mutating Tools and Concurrency
+
+Tool calls can run in parallel. If your custom tool mutates files, use `withFileMutationQueue()` so it participates in the same per-file queue as built-in `edit` and `write`.
+
+```typescript
+import { withFileMutationQueue } from "@mariozechner/pi-coding-agent";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+
+async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+  const normalizedPath = params.path.startsWith("@") ? params.path.slice(1) : params.path;
+  const absolutePath = resolve(ctx.cwd, normalizedPath);
+
+  return withFileMutationQueue(absolutePath, async () => {
+    await mkdir(dirname(absolutePath), { recursive: true });
+    const current = await readFile(absolutePath, "utf8");
+    const next = current.replace(params.oldText, params.newText);
+    await writeFile(absolutePath, next, "utf8");
+
+    return {
+      content: [{ type: "text", text: `Updated ${normalizedPath}` }],
+      details: {},
+    };
+  });
+}
+```
+
+Queue the whole read-modify-write window, not just the final write.
 
 ## Streaming Updates
 
@@ -753,7 +838,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { keyHint, formatSize } from "@mariozechner/pi-coding-agent";
 import { Container, Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@mariozechner/pi-coding-agent";
+import { type Static, Type } from "@sinclair/typebox";
 
 // Schema
 const parameters = Type.Object({
@@ -780,8 +865,8 @@ const repoTreeTool = {
   description: "List files and directories in a GitHub repository.",
   promptSnippet: "Browse repository file structure",
   promptGuidelines: [
-    "Use this to explore repository structure before reading files",
-    "Start with root path, then drill down into directories",
+    "Use repo_tree to explore repository structure before reading files.",
+    "Start repo_tree at the root path, then drill down into directories.",
   ],
   parameters,
 

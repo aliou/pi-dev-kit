@@ -136,7 +136,7 @@ There are two ways to inject guidance, depending on complexity:
 For most tools, use the SDK-level `promptSnippet` and `promptGuidelines` fields directly on the tool definition. No hook is needed.
 
 - **`promptSnippet`** — Injected into the "Available tools" system prompt section. Use for a concise (1–2 sentence) description of when to prefer this tool.
-- **`promptGuidelines`** — Appended to the "Guidelines" section. Use for a short list of usage rules.
+- **`promptGuidelines`** — Appended verbatim to the global "Guidelines" section. Use for a short list of usage rules that still make sense without extra tool-local context.
 
 ```typescript
 const myTool = {
@@ -145,8 +145,8 @@ const myTool = {
   description: "...",
   promptSnippet: "Manage background processes without blocking the conversation.",
   promptGuidelines: [
-    "Use this tool for long-running commands instead of bash.",
-    "After starting a process, continue other work instead of waiting.",
+    "Use my_tool for long-running commands instead of bash.",
+    "After starting my_tool, continue other work instead of waiting.",
   ],
   parameters: ...,
   execute: ...,
@@ -154,6 +154,8 @@ const myTool = {
 ```
 
 This is the simplest approach and works well when guidance is specific to a single tool.
+
+Because these bullets are merged into the shared global `Guidelines` section, avoid vague phrasing like `Use this tool...`. Name the exact tool (`my_tool`, `process`, `linkup_web_search`) so the bullet remains clear after injection.
 
 #### Tier 2: System Prompt Hook (For Complex Cross-Tool Orchestration)
 
