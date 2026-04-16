@@ -79,12 +79,14 @@ Not every extension needs every directory. A simple extension with one tool migh
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": ">=CURRENT_VERSION",
     "@mariozechner/pi-ai": ">=CURRENT_VERSION",
-    "@mariozechner/pi-tui": ">=CURRENT_VERSION"
+    "@mariozechner/pi-tui": ">=CURRENT_VERSION",
+    "@sinclair/typebox": ">=0.34.0"
   },
   "peerDependenciesMeta": {
     "@mariozechner/pi-coding-agent": { "optional": true },
     "@mariozechner/pi-ai": { "optional": true },
-    "@mariozechner/pi-tui": { "optional": true }
+    "@mariozechner/pi-tui": { "optional": true },
+    "@sinclair/typebox": { "optional": true }
   },
   "devDependencies": {
     "@aliou/biome-plugins": "^0.3.0",
@@ -93,6 +95,7 @@ Not every extension needs every directory. A simple extension with one tool migh
     "@mariozechner/pi-ai": "CURRENT_VERSION",
     "@mariozechner/pi-coding-agent": "CURRENT_VERSION",
     "@mariozechner/pi-tui": "CURRENT_VERSION",
+    "@sinclair/typebox": "0.34.41",
     "@types/node": "^25.0.0",
     "husky": "^9.0.0",
     "typescript": "^5.8.0"
