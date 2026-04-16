@@ -1,5 +1,22 @@
 # @aliou/pi-dev-kit
 
+## 0.6.2
+
+### Patch Changes
+
+- 19d2632: Fix TypeBox imports in skill documentation and template example
+
+  - Add `@sinclair/typebox` to peerDependencies/devDependencies in structure.md example
+  - Fix template tools/index.ts to show correct separate imports for `defineTool` (from pi-coding-agent) and `Type`/`Static` (from @sinclair/typebox)
+  - Add promptSnippet/promptGuidelines examples to template with proper tool naming
+
+- f760c70: Align the `pi-extension` skill references with current pi-mono behavior.
+
+  - clarify that `promptGuidelines` are injected verbatim into the shared global guidelines section
+  - fix TypeBox import guidance to use `@sinclair/typebox`
+  - update provider docs to the current `pi.registerProvider(name, config)` API
+  - document `prepareArguments`, `withFileMutationQueue`, `@` path normalization, and prompt metadata override caveats
+
 ## 0.6.1
 
 ### Patch Changes
