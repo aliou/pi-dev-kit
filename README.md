@@ -1,3 +1,5 @@
+![banner](https://assets.aliou.me/pi-extensions/banners/pi-dev-kit.png)
+
 # Pi Dev Kit
 
 Tools and commands for building, maintaining, and updating Pi extensions.
