@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.6.3
+
+### Patch Changes
+
+- 50d243e: Name tools explicitly in promptGuidelines so they make sense in the global system prompt Guidelines section
+
 ## 0.6.2
 
 ### Patch Changes
