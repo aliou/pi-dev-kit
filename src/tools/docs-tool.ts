@@ -47,8 +47,8 @@ export function setupDocsTool(pi: ExtensionAPI) {
 
     promptSnippet: "List Pi documentation files",
     promptGuidelines: [
-      "Use to discover available Pi documentation",
-      "Returns markdown files from README.md, docs/, and examples/",
+      "Use pi_docs to discover available Pi documentation",
+      "pi_docs returns markdown files from README.md, docs/, and examples/",
     ],
 
     parameters: DocsParamsSchema,

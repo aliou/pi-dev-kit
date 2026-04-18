@@ -244,9 +244,9 @@ export function setupChangelogTool(pi: ExtensionAPI) {
     promptSnippet: `pi_changelog version="1.2.3" // Get changelog for specific version
 pi_changelog // Get latest changelog`,
     promptGuidelines: [
-      "Use this tool to check what's new in a Pi version",
+      "Use pi_changelog to check what's new in a Pi version",
       "Use pi_changelog_versions first to list available versions",
-      "Leave version empty to get the latest changelog",
+      "Leave version empty for pi_changelog to get the latest changelog",
     ],
 
     parameters: ChangelogParamsSchema,

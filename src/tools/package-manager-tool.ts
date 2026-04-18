@@ -46,8 +46,8 @@ export function setupPackageManagerTool(pi: ExtensionAPI) {
       "Detect the package manager used in the current project by checking lockfiles and package.json",
     promptSnippet: "Detect the package manager for this project",
     promptGuidelines: [
-      "Use when you need to know which package manager (npm, yarn, pnpm, bun) the project uses",
-      "Helpful before running install commands or scripts",
+      "Use detect_package_manager when you need to know which package manager (npm, yarn, pnpm, bun) the project uses",
+      "detect_package_manager is helpful before running install commands or scripts",
     ],
 
     parameters: Params,

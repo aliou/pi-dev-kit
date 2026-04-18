@@ -24,7 +24,7 @@ export function setupVersionTool(pi: ExtensionAPI) {
     description: "Get the version of the currently running Pi instance",
     promptSnippet: "Check the current Pi version.",
     promptGuidelines: [
-      "Use when the user asks about the Pi version or when a task depends on knowing the installed version.",
+      "Use pi_version when the user asks about the Pi version or when a task depends on knowing the installed version.",
     ],
 
     parameters: VersionParams,
