@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.6.4
+
+### Patch Changes
+
+- 4edd7ad: Update Pi peer/dev dependencies from 0.65.2 to 0.68.0
+
 ## 0.6.3
 
 ### Patch Changes
