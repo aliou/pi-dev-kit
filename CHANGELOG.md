@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.6.5
+
+### Patch Changes
+
+- b637b56: Update Pi extension guidance for feature entry points and message renderers.
+
 ## 0.6.4
 
 ### Patch Changes
