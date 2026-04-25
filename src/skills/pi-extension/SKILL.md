@@ -42,12 +42,12 @@ import { Container, Markdown, Text } from "@mariozechner/pi-tui";
 ### Creating a New Extension
 
 1. Read `references/structure.md` for the project layout and package.json template.
-2. Create the entry point (`src/index.ts`) with a default export function.
-3. Decide what the extension provides:
-   - **Tools** (LLM-callable): Read `references/tools.md`.
-   - **Commands** (user-invoked): Read `references/commands.md`.
-   - **Providers** (LLM backends): Read `references/providers.md`.
-   - **Hooks** (event handlers): Read `references/hooks.md`. Includes both `tool_call` blocking hooks and spawn hooks for transparent command rewriting via `createBashTool`.
+2. Decide what the extension provides and create one feature entry point per directory:
+   - **Tools** (LLM-callable): `src/tools/index.ts`; read `references/tools.md`.
+   - **Commands** (user-invoked): `src/commands/index.ts`; read `references/commands.md`.
+   - **Providers** (LLM backends): `src/providers/index.ts`; read `references/providers.md`.
+   - **Hooks** (event handlers): `src/hooks/index.ts`; read `references/hooks.md`. Includes both `tool_call` blocking hooks and spawn hooks for transparent command rewriting via `createBashTool`.
+3. Add each feature entry point to `package.json` `pi.extensions`. Each entry point exports a default function that receives `ExtensionAPI` and calls `pi.registerTool`, `pi.registerCommand`, `pi.registerProvider`, or `pi.on` directly.
 4. Read `references/modes.md` for mode-awareness guidelines. Every extension must handle Interactive, RPC, and Print modes.
 5. If the extension displays rich UI: Read `references/components.md` for TUI components and `references/messages.md` for message display patterns.
 6. If the extension tracks state: Read `references/state.md`.
@@ -115,14 +115,16 @@ When implementing, look at these existing extensions for patterns:
 19. **Never use Node child_process APIs**: Do not use `child_process.exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, or `execFileSync` to run binaries or shell scripts. Always use `pi.exec()`. `pi.exec` handles CWD, signal propagation, and output capture consistently. The only exception is if you need a long-lived streaming process with stdin/stdout piping that `pi.exec` cannot support — document the reason in code comments.
 20. **Never use `homedir()` for pi paths**: Use the SDK helpers from `@mariozechner/pi-coding-agent` instead. They respect the `PI_CODING_AGENT_DIR` env var which is used for testing and custom setups. Key functions: `getAgentDir()`, `getSettingsPath()`, `getSessionsDir()`, `getPromptsDir()`, `getToolsDir()`, `getCustomThemesDir()`, `getModelsPath()`, `getAuthPath()`, `getBinDir()`, `getDebugLogPath()`. All exported from the main package entry point.
 21. **Config uses the interface pattern**: `config.ts` defines two TypeScript interfaces (`RawConfig` with all fields optional, `ResolvedConfig` with all fields required) and a `ConfigLoader<Raw, Resolved>` instance. Do not use TypeBox schemas for config types. For config migrations, use `ConfigLoader` `migrations` option. For settings UI, use `registerSettingsCommand` from `@aliou/pi-utils-settings`.
-22. **Entry point deviations must be documented**: The standard entry point pattern is load config → check `enabled` → register. Deviations (no config, API-key-first ordering, no `enabled` toggle) are acceptable when justified, but must be noted in `AGENTS.md`.
+22. **Entry point deviations must be documented**: The standard entry point pattern for each feature entry is load config → check `enabled` → register with `pi`. Deviations (no config, API-key-first ordering, no `enabled` toggle) are acceptable when justified, but must be noted in `AGENTS.md`.
 23. **Session replacement uses `withSession`**: After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, captured old `pi`, command `ctx`, and `ctx.sessionManager` are stale and may throw. Put post-switch work in `withSession` and use only that fresh callback context.
 
 ## Checklist
 
 Before considering an extension complete:
 
-- [ ] Entry point has correct default export signature.
+- [ ] Each feature entry point listed in `package.json` `pi.extensions` has the correct default export signature.
+- [ ] Tools, commands, providers, and hooks are separate feature entry directories; no root `src/index.ts` fan-out registrar.
+- [ ] TUI components are colocated with the feature that uses them, or in `src/components/` only when genuinely shared; they are not listed in `pi.extensions`.
 - [ ] Every standalone tool is wrapped in `defineTool()` so typed params flow into `execute`, `renderCall`, and `renderResult` without casts.
 - [ ] All tools have correct execute parameter order.
 - [ ] All `onUpdate` calls use optional chaining.
@@ -155,7 +157,7 @@ Before considering an extension complete:
 - [ ] `@mariozechner/pi-tui` (and any other Pi-provided package) is in `peerDependencies` with `optional: true` if imported at runtime, not just `devDependencies`.
 - [ ] `prepare` script is `"[ -d .git ] && husky || true"`, not bare `"husky"`.
 - [ ] `config.ts` uses `ConfigLoader<Raw, Resolved>` with TypeScript interfaces, not TypeBox schemas.
-- [ ] If deviating from the standard entry point pattern (load-config → check-enabled → register), the reason is documented in `AGENTS.md`.
+- [ ] If deviating from the standard feature entry pattern (load-config → check-enabled → register), the reason is documented in `AGENTS.md`.
 - [ ] Settings use `registerSettingsCommand` from `@aliou/pi-utils-settings` when the extension has user-configurable settings.
 - [ ] New code imports TypeBox from `typebox`, not `@sinclair/typebox`.
 - [ ] Any session replacement code uses `withSession` for post-switch work and does not reuse stale session-bound objects.

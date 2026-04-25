@@ -7,27 +7,27 @@ This covers the standalone repository structure for a Pi extension. This is the 
 ```
 my-extension/
   src/
-    index.ts              # Entry point (default export)
     config.ts             # Config schema (types) + loader + defaults
     client.ts             # API client (if wrapping a third-party API)
     tools/
-      my-tool.ts          # One file per tool (simple tool)
-      my-multi-tool/      # Multi-action tool
-        index.ts           # Tool registration + renderCall/renderResult
-        actions/           # One file per action
-          create.ts
-          list.ts
-          show.ts
-        render.ts          # Separate render module (when rendering is complex)
-        types.ts           # Serialized types for tool details
+      index.ts            # Tool extension entry point (default export, calls pi.registerTool)
+      actions/            # Optional one file per action for multi-action tools
+        create.ts
+        list.ts
+        show.ts
+      render.ts           # Optional separate render module
+      types.ts            # Optional serialized types for tool details
     commands/
-      my-command.ts        # One file per command
-    components/
-      my-renderer.ts       # Shared TUI components
+      index.ts            # Command extension entry point (default export, calls pi.registerCommand)
+      components.ts       # Optional command UI components
+    hooks/
+      index.ts            # Hook extension entry point (default export, calls pi.on)
+    components/           # Optional shared TUI components used by tools/commands/hooks
+      my-component.ts
     providers/
-      index.ts             # Provider registration
-      models.ts            # Model definitions
-    utils/                 # Internal helpers (matching, parsing, etc.)
+      index.ts            # Provider extension entry point (default export, calls pi.registerProvider)
+      models.ts           # Model definitions
+    utils/                # Internal helpers (matching, parsing, etc.)
       my-helper.ts
   package.json
   tsconfig.json
@@ -38,12 +38,14 @@ my-extension/
   README.md
 ```
 
-Not every extension needs every directory. A simple extension with one tool might only have `src/index.ts` and `src/tools/my-tool.ts`.
+Not every extension needs every directory. A simple extension with one tool might only have `src/tools/index.ts` plus `src/config.ts` if it has settings.
 
 ### Organization principles
 
-- **`index.ts` and `config.ts`** stay at root. These are the two core files every non-trivial extension has.
-- **Tools, commands, components, providers, hooks** each get their own directory. One file per tool/command/component.
+- **Each Pi feature directory is its own extension entry point.** `tools/index.ts`, `commands/index.ts`, `hooks/index.ts`, and `providers/index.ts` each export a default function that receives `ExtensionAPI` and registers that feature with `pi`.
+- **`config.ts`** stays at root and is shared by feature entry points. Each entry point loads config and gates itself with `enabled` when applicable.
+- **Do not use a single root `src/index.ts` that imports and registers everything.** Declare each feature entry point in `package.json` under `pi.extensions` instead.
+- **Components are not entry points.** TUI components are support modules used by tools, commands, or hooks. Keep them colocated with the feature that uses them, or in `src/components/` only when genuinely shared.
 - **Config types live in `config.ts`**, not a separate `types.ts` or `config-schema.ts`. The config file exports both the types (raw and resolved) and the config loader instance.
 - **Utility/helper files** go in `utils/`. This includes pattern matching, shell parsing, event helpers, migrations, etc. Anything that is not a tool, command, component, provider, or hook.
 - **No separate `types.ts`** unless the extension has shared types unrelated to config (rare). Config types are the most common shared types, and they belong in `config.ts`.
@@ -70,7 +72,12 @@ Not every extension needs every directory. A simple extension with one tool migh
   },
   "files": ["src", "README.md"],
   "pi": {
-    "extensions": ["./src/index.ts"],
+    "extensions": [
+      "./src/tools/index.ts",
+      "./src/commands/index.ts",
+      "./src/hooks/index.ts",
+      "./src/providers/index.ts"
+    ],
     "skills": ["./skills"],
     "themes": ["./themes"],
     "prompts": ["./prompts"],
@@ -130,7 +137,7 @@ Only include `pi` sub-fields that are actually used. `skills`, `themes`, `prompt
 
 | Field | Description |
 |---|---|
-| `extensions` | Array of entry point paths. Each is a TypeScript file with a default export function. |
+| `extensions` | Array of extension entry point paths. Each file or directory `index.ts` exports a default function receiving `ExtensionAPI`. Prefer one entry point per feature directory (`tools/index.ts`, `commands/index.ts`, etc.). |
 | `skills` | Array of directories containing skill definitions. Optional. |
 | `themes` | Array of directories containing theme files. Optional. |
 | `prompts` | Array of directories containing prompt files. Optional. |
@@ -405,39 +412,86 @@ const wizard = new Wizard({
 
 Each step receives a `WizardStepContext` with `markComplete()`/`markIncomplete()` to control navigation gates. See `pi-linear/src/commands/auth-wizard.ts` for a full example with async validation and spinner.
 
-## Entry Point (src/index.ts)
+## Extension Entry Points
 
-The entry point is a default export function that receives the `ExtensionAPI` object.
+Each extension entry point is a default export function that receives the `ExtensionAPI` object. Do not centralize registration in one root `src/index.ts`; instead, make each feature directory an entry point and list those paths in `package.json` `pi.extensions`.
 
 ### Standard Pattern
 
 ```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { configLoader } from "./config";
-import { registerCommands } from "./commands";
-import { registerHooks } from "./hooks";
-import { registerTools } from "./tools";
+// src/tools/index.ts
+import type { AgentToolResult, ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { defineTool } from "@mariozechner/pi-coding-agent";
+import { type Static, Type } from "typebox";
+import { configLoader } from "../config";
+
+const parameters = Type.Object({
+  query: Type.String({ description: "Search query" }),
+});
+type MyToolParams = Static<typeof parameters>;
+interface MyToolDetails {
+  results: string[];
+}
+
+const myTool = defineTool({
+  name: "my_tool",
+  label: "My Tool",
+  description: "Search for items",
+  parameters,
+  async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<AgentToolResult<MyToolDetails>> {
+    const results = await search(params.query, { signal });
+    return {
+      content: [{ type: "text", text: JSON.stringify(results) }],
+      details: { results },
+    };
+  },
+});
 
 export default async function (pi: ExtensionAPI) {
   await configLoader.load();
   const config = configLoader.getConfig();
   if (!config.enabled) return;
 
-  registerTools(pi);
-  registerCommands(pi);
-  registerHooks(pi);
+  pi.registerTool(myTool);
+}
+```
+
+Declare the entry point directly:
+
+```json
+{
+  "pi": {
+    "extensions": ["./src/tools/index.ts"]
+  }
+}
+```
+
+For multiple features, list multiple entries:
+
+```json
+{
+  "pi": {
+    "extensions": [
+      "./src/tools/index.ts",
+      "./src/commands/index.ts",
+      "./src/hooks/index.ts",
+      "./src/providers/index.ts"
+    ]
+  }
 }
 ```
 
 ### Acceptable Exceptions
 
-Not all extensions follow the standard pattern exactly. These deviations are valid:
+Not all entry points follow the standard pattern exactly. These deviations are valid:
 
 **No config**: Extensions that use environment variables exclusively and have no user-configurable settings skip config loading entirely. The entry point reads the env var directly and gates registration on its presence.
 
 **API-key-first**: Extensions wrapping a third-party API check for the API key before loading config or registering anything. If the key is missing, notify the user and return early. Config loads after the key check. See the API Key Pattern section.
 
 **No `enabled` check**: Extensions that are always active by design omit the `enabled` field and the early-return check. The entry point still loads config for other settings. Document this decision in `AGENTS.md`.
+
+**Shared setup required**: If multiple feature entry points need a shared setup step, extract a helper module (for example `src/bootstrap.ts`) and call it from each entry. Do not reintroduce a central root entry point just to fan out registration.
 
 When deviating from the standard pattern, note the reason in the extension's `AGENTS.md`.
 

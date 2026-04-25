@@ -36,19 +36,36 @@ pi.sendMessage({
 Registers a custom renderer for messages with a specific `customType`:
 
 ```typescript
-pi.registerMessageRenderer("balance-result", (message, theme) => {
-  const { balance } = message.details;
-  return [
-    theme.bold("Account Balance"),
-    "",
-    theme.fg("success", `  $${balance.toFixed(2)}`),
-  ].join("\n");
-});
+import type {
+  ExtensionAPI,
+  MessageRenderOptions,
+  Theme,
+} from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
+
+interface BalanceDetails {
+  balance?: number;
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.registerMessageRenderer<BalanceDetails>(
+    "balance-result",
+    (message, _options: MessageRenderOptions, theme: Theme) => {
+      const balance = message.details?.balance;
+      const text =
+        typeof balance === "number"
+          ? `Account Balance: $${balance.toFixed(2)}`
+          : message.content;
+
+      return new Text(theme.fg("success", text), 0, 0);
+    },
+  );
+}
 ```
 
-The renderer receives the full message object and the theme. It returns a string for display in the TUI.
+The renderer receives the full message object, render options, and theme. It returns a TUI `Component` such as `Text`, `Box`, `Markdown`, or a custom component. If no renderer is registered for a `customType`, the message's `content` field is displayed as plain text.
 
-If no renderer is registered for a `customType`, the message's `content` field is displayed as plain text.
+For larger renderers, keep the renderer implementation next to the hook or command that emits that `customType`. See `pi-processes/src/hooks/message-renderer.ts` for a compact lifecycle-message renderer and `pi-harness/extensions/breadcrumbs/lib/session-link.ts` for richer persistent session-link renderers.
 
 ## Custom Message Design Guide (breadcrumbs-style)
 

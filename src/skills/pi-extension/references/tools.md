@@ -23,6 +23,8 @@ import { type Static, Type } from "typebox";
 
 ## Registration
 
+Tool files are extension entry points. Put the tool registration in `src/tools/index.ts`, export a default function, and list that file in `package.json` `pi.extensions`.
+
 ```typescript
 const parameters = Type.Object({
   query: Type.String({ description: "Search query" }),
@@ -60,7 +62,11 @@ const myTool = defineTool({
   },
 });
 
-export default function (pi: ExtensionAPI) {
+export default async function (pi: ExtensionAPI) {
+  await configLoader.load();
+  const config = configLoader.getConfig();
+  if (!config.enabled) return;
+
   pi.registerTool(myTool);
 }
 ```
