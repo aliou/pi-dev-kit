@@ -4,13 +4,11 @@ import { ToolBody, ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
 import type {
   AgentToolResult,
   ExtensionAPI,
-  ExtensionContext,
   Theme,
-  ToolRenderResultOptions,
 } from "@mariozechner/pi-coding-agent";
-import { keyHint, VERSION } from "@mariozechner/pi-coding-agent";
+import { defineTool, keyHint, VERSION } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@sinclair/typebox";
+import { type Static, Type } from "typebox";
 import { findPiInstallation } from "./utils";
 
 const GITHUB_RAW_CHANGELOG_URL =
@@ -32,7 +30,7 @@ const ChangelogParamsSchema = Type.Object({
 type ChangelogParams = Static<typeof ChangelogParamsSchema>;
 
 const ChangelogVersionsParamsSchema = Type.Object({});
-type ChangelogVersionsParams = Record<string, never>;
+type ChangelogVersionsParams = Static<typeof ChangelogVersionsParamsSchema>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -200,6 +198,23 @@ const COLLAPSED_LINES = 8;
 // Render helpers
 // ---------------------------------------------------------------------------
 
+function renderChangelogCall(args: ChangelogParams, theme: Theme) {
+  return new ToolCallHeader(
+    {
+      toolName: "Pi Changelog",
+      mainArg: args.version ? `v${args.version}` : "latest",
+    },
+    theme,
+  );
+}
+
+function renderChangelogVersionsCall(
+  _args: ChangelogVersionsParams,
+  theme: Theme,
+) {
+  return new ToolCallHeader({ toolName: "Pi Changelog Versions" }, theme);
+}
+
 function renderChangelogContent(
   content: string,
   theme: Theme,
@@ -235,250 +250,230 @@ function renderChangelogContent(
 // pi_changelog
 // ---------------------------------------------------------------------------
 
-export function setupChangelogTool(pi: ExtensionAPI) {
-  pi.registerTool<typeof ChangelogParamsSchema, ChangelogDetails>({
-    name: "pi_changelog",
-    label: "Pi Changelog",
-    description:
-      "Get changelog entry for a Pi version. Returns latest by default. Use pi_changelog_versions to list all available versions.",
-    promptSnippet: `pi_changelog version="1.2.3" // Get changelog for specific version
+const changelogTool = defineTool({
+  name: "pi_changelog",
+  label: "Pi Changelog",
+  description:
+    "Get changelog entry for a Pi version. Returns latest by default. Use pi_changelog_versions to list all available versions.",
+  promptSnippet: `pi_changelog version="1.2.3" // Get changelog for specific version
 pi_changelog // Get latest changelog`,
-    promptGuidelines: [
-      "Use pi_changelog to check what's new in a Pi version",
-      "Use pi_changelog_versions first to list available versions",
-      "Leave version empty for pi_changelog to get the latest changelog",
-    ],
+  promptGuidelines: [
+    "Use pi_changelog to check what's new in a Pi version",
+    "Use pi_changelog_versions first to list available versions",
+    "Leave version empty for pi_changelog to get the latest changelog",
+  ],
 
-    parameters: ChangelogParamsSchema,
+  parameters: ChangelogParamsSchema,
 
-    async execute(
-      _toolCallId: string,
-      params: ChangelogParams,
-      _signal: AbortSignal | undefined,
-      _onUpdate: unknown,
-      _ctx: ExtensionContext,
-    ): Promise<AgentToolResult<ChangelogDetails>> {
-      // Newer than installed -> fetch from GitHub
-      if (params.version && isNewerThanInstalled(params.version)) {
-        const githubContent = await fetchGithubChangelog();
-        const changelog = findChangelogEntry(githubContent, params.version);
+  async execute(
+    _toolCallId,
+    params,
+    _signal,
+    _onUpdate,
+    _ctx,
+  ): Promise<AgentToolResult<ChangelogDetails>> {
+    // Newer than installed -> fetch from GitHub
+    if (params.version && isNewerThanInstalled(params.version)) {
+      const githubContent = await fetchGithubChangelog();
+      const changelog = findChangelogEntry(githubContent, params.version);
 
-        const message = `Changelog for ${changelog.version} (from GitHub)\n\n## ${changelog.version}\n\n${changelog.content}`;
-        return {
-          content: [{ type: "text", text: message }],
-          details: {
-            changelog,
-            source: "github",
-          },
-        };
-      }
-
-      // Local
-      const local = readLocalChangelog();
-      const changelog = findChangelogEntry(local.content, params.version);
-
-      const message = `Changelog for ${changelog.version}\n\n## ${changelog.version}\n\n${changelog.content}`;
+      const message = `Changelog for ${changelog.version} (from GitHub)\n\n## ${changelog.version}\n\n${changelog.content}`;
       return {
         content: [{ type: "text", text: message }],
         details: {
           changelog,
-          source: "local",
+          source: "github",
         },
       };
-    },
+    }
 
-    renderCall(args: ChangelogParams, theme: Theme) {
-      return new ToolCallHeader(
-        {
-          toolName: "Pi Changelog",
-          mainArg: args.version ? `v${args.version}` : "latest",
-        },
-        theme,
+    // Local
+    const local = readLocalChangelog();
+    const changelog = findChangelogEntry(local.content, params.version);
+
+    const message = `Changelog for ${changelog.version}\n\n## ${changelog.version}\n\n${changelog.content}`;
+    return {
+      content: [{ type: "text", text: message }],
+      details: {
+        changelog,
+        source: "local",
+      },
+    };
+  },
+
+  renderCall(args, theme) {
+    return renderChangelogCall(args, theme);
+  },
+
+  renderResult(result, options, theme) {
+    const { details } = result;
+
+    // Check for missing expected fields to detect errors
+    if (!details?.changelog) {
+      const text = result.content[0];
+      return new Text(
+        text?.type === "text" && text.text ? text.text : "No result",
+        0,
+        0,
       );
-    },
+    }
 
-    renderResult(
-      result: AgentToolResult<ChangelogDetails>,
-      options: ToolRenderResultOptions,
-      theme: Theme,
-    ) {
-      const { details } = result;
+    const fields: Array<
+      { label: string; value: string; showCollapsed?: boolean } | Text
+    > = [];
 
-      // Check for missing expected fields to detect errors
-      if (!details?.changelog) {
-        const text = result.content[0];
-        return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
-          0,
-          0,
-        );
-      }
+    const lines: string[] = [];
 
-      const fields: Array<
-        { label: string; value: string; showCollapsed?: boolean } | Text
-      > = [];
-
-      const lines: string[] = [];
-
-      if (options.expanded) {
-        // Expanded view: show full changelog content
-        lines.push(
-          theme.fg(
-            "accent",
-            theme.bold(`Version: ${details.changelog.version}`),
-          ),
-          "",
-        );
-        lines.push(...renderChangelogContent(details.changelog.content, theme));
-        fields.push(new Text(lines.join("\n"), 0, 0));
-      } else {
-        // Collapsed view: show version + first few lines of changelog + expand hint
-        lines.push(
-          theme.fg(
-            "accent",
-            theme.bold(`Version: ${details.changelog.version}`),
-          ),
-          "",
-        );
-        lines.push(
-          ...renderChangelogContent(
-            details.changelog.content,
-            theme,
-            COLLAPSED_LINES,
-          ),
-        );
-        lines.push(
-          "",
-          theme.fg("muted", `${keyHint("app.tools.expand", "to expand")}`),
-        );
-        fields.push(new Text(lines.join("\n"), 0, 0));
-      }
-
-      // Footer: show source tag only
-      const footer = new ToolFooter(theme, {
-        items: [
-          {
-            label: "source",
-            value: details.source ?? "local",
-            tone: "accent",
-          },
-        ],
-      });
-
-      return new ToolBody(
-        {
-          fields,
-          footer,
-        },
-        options,
-        theme,
-      );
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // pi_changelog_versions
-  // -------------------------------------------------------------------------
-
-  pi.registerTool<
-    typeof ChangelogVersionsParamsSchema,
-    ChangelogVersionsDetails
-  >({
-    name: "pi_changelog_versions",
-    label: "Pi Changelog Versions",
-    description: "List all available Pi changelog versions",
-    promptSnippet: `pi_changelog_versions // List all available versions`,
-
-    parameters: ChangelogVersionsParamsSchema,
-
-    async execute(
-      _toolCallId: string,
-      _params: ChangelogVersionsParams,
-      _signal: AbortSignal | undefined,
-      _onUpdate: unknown,
-      _ctx: ExtensionContext,
-    ): Promise<AgentToolResult<ChangelogVersionsDetails>> {
-      const local = readLocalChangelog();
-      const { entries } = parseChangelogEntries(local.content);
-
-      if (entries.length === 0) {
-        throw new Error("No version entries found in changelog");
-      }
-
-      const versions = entries.map((e) => e.version);
-      const message = `${versions.length} versions available:\n${versions.join(", ")}`;
-
-      return {
-        content: [{ type: "text", text: message }],
-        details: {
-          versions,
-          source: "local",
-        },
-      };
-    },
-
-    renderCall(_args: ChangelogVersionsParams, theme: Theme) {
-      return new ToolCallHeader({ toolName: "Pi Changelog Versions" }, theme);
-    },
-
-    renderResult(
-      result: AgentToolResult<ChangelogVersionsDetails>,
-      options: ToolRenderResultOptions,
-      theme: Theme,
-    ) {
-      const { details } = result;
-
-      // Check for missing expected fields to detect errors
-      if (!details?.versions) {
-        const text = result.content[0];
-        return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
-          0,
-          0,
-        );
-      }
-
-      const fields: Array<
-        { label: string; value: string; showCollapsed?: boolean } | Text
-      > = [];
-
-      const lines: string[] = [
-        theme.fg("accent", `${details.versions.length} versions available:`),
+    if (options.expanded) {
+      // Expanded view: show full changelog content
+      lines.push(
+        theme.fg("accent", theme.bold(`Version: ${details.changelog.version}`)),
         "",
-      ];
-      const cols = 6;
-      const maxLen = Math.max(
-        ...details.versions.map((version) => version.length),
       );
-      const colWidth = maxLen + 2;
-      for (let i = 0; i < details.versions.length; i += cols) {
-        const row = details.versions
-          .slice(i, i + cols)
-          .map((version) => version.padEnd(colWidth))
-          .join("");
-        lines.push(theme.fg("dim", row));
-      }
+      lines.push(...renderChangelogContent(details.changelog.content, theme));
       fields.push(new Text(lines.join("\n"), 0, 0));
-
-      // Footer: just show version count
-      const footer = new ToolFooter(theme, {
-        items: [
-          {
-            label: "count",
-            value: String(details.versions.length),
-            tone: "accent",
-          },
-        ],
-      });
-
-      return new ToolBody(
-        {
-          fields,
-          footer,
-        },
-        options,
-        theme,
+    } else {
+      // Collapsed view: show version + first few lines of changelog + expand hint
+      lines.push(
+        theme.fg("accent", theme.bold(`Version: ${details.changelog.version}`)),
+        "",
       );
-    },
-  });
+      lines.push(
+        ...renderChangelogContent(
+          details.changelog.content,
+          theme,
+          COLLAPSED_LINES,
+        ),
+      );
+      lines.push(
+        "",
+        theme.fg("muted", `${keyHint("app.tools.expand", "to expand")}`),
+      );
+      fields.push(new Text(lines.join("\n"), 0, 0));
+    }
+
+    // Footer: show source tag only
+    const footer = new ToolFooter(theme, {
+      items: [
+        {
+          label: "source",
+          value: details.source ?? "local",
+          tone: "accent",
+        },
+      ],
+    });
+
+    return new ToolBody(
+      {
+        fields,
+        footer,
+      },
+      options,
+      theme,
+    );
+  },
+});
+
+// -------------------------------------------------------------------------
+// pi_changelog_versions
+// -------------------------------------------------------------------------
+
+const changelogVersionsTool = defineTool({
+  name: "pi_changelog_versions",
+  label: "Pi Changelog Versions",
+  description: "List all available Pi changelog versions",
+  promptSnippet: `pi_changelog_versions // List all available versions`,
+
+  parameters: ChangelogVersionsParamsSchema,
+
+  async execute(
+    _toolCallId,
+    _params,
+    _signal,
+    _onUpdate,
+    _ctx,
+  ): Promise<AgentToolResult<ChangelogVersionsDetails>> {
+    const local = readLocalChangelog();
+    const { entries } = parseChangelogEntries(local.content);
+
+    if (entries.length === 0) {
+      throw new Error("No version entries found in changelog");
+    }
+
+    const versions = entries.map((e) => e.version);
+    const message = `${versions.length} versions available:\n${versions.join(", ")}`;
+
+    return {
+      content: [{ type: "text", text: message }],
+      details: {
+        versions,
+        source: "local",
+      },
+    };
+  },
+
+  renderCall(args, theme) {
+    return renderChangelogVersionsCall(args, theme);
+  },
+
+  renderResult(result, options, theme) {
+    const { details } = result;
+
+    // Check for missing expected fields to detect errors
+    if (!details?.versions) {
+      const text = result.content[0];
+      return new Text(
+        text?.type === "text" && text.text ? text.text : "No result",
+        0,
+        0,
+      );
+    }
+
+    const fields: Array<
+      { label: string; value: string; showCollapsed?: boolean } | Text
+    > = [];
+
+    const lines: string[] = [
+      theme.fg("accent", `${details.versions.length} versions available:`),
+      "",
+    ];
+    const cols = 6;
+    const maxLen = Math.max(
+      ...details.versions.map((version) => version.length),
+    );
+    const colWidth = maxLen + 2;
+    for (let i = 0; i < details.versions.length; i += cols) {
+      const row = details.versions
+        .slice(i, i + cols)
+        .map((version) => version.padEnd(colWidth))
+        .join("");
+      lines.push(theme.fg("dim", row));
+    }
+    fields.push(new Text(lines.join("\n"), 0, 0));
+
+    // Footer: just show version count
+    const footer = new ToolFooter(theme, {
+      items: [
+        {
+          label: "count",
+          value: String(details.versions.length),
+          tone: "accent",
+        },
+      ],
+    });
+
+    return new ToolBody(
+      {
+        fields,
+        footer,
+      },
+      options,
+      theme,
+    );
+  },
+});
+
+export function setupChangelogTool(pi: ExtensionAPI) {
+  pi.registerTool(changelogTool);
+  pi.registerTool(changelogVersionsTool);
 }

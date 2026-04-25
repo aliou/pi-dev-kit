@@ -14,7 +14,7 @@ Pi injects these packages via jiti at runtime. Extensions do not need to install
 - `@mariozechner/pi-coding-agent` — core types, utilities, and extension APIs
 - `@mariozechner/pi-tui` — TUI components
 - `@mariozechner/pi-ai` — AI utilities (`StringEnum`, etc.)
-- `@sinclair/typebox` — schema definitions for tool parameters and related types
+- `typebox` — TypeBox 1.x schema definitions for tool parameters and related types. Do not use `@sinclair/typebox` in new code.
 
 ```typescript
 // Tool UI components (from @aliou/pi-utils-ui)
@@ -104,24 +104,26 @@ When implementing, look at these existing extensions for patterns:
 8. **Deterministic call rendering**: Build `renderCall` with a stable extraction order (action → main arg → option args → long args), process-style. Same input should produce same header layout.
 9. **Long args placement**: Put long prompt/task/question/context strings on following lines. Keep first line scannable.
 10. **Result layout**: In `renderResult(result, options, theme)`, handle `isPartial` first with a stable tool-scoped message. Detect errors by checking for missing expected fields in `details` (framework sets `details: {}` on throw). Use `ToolBody` from `@aliou/pi-utils-ui` with `showCollapsed` fields. Use `ToolFooter` conditionally (omit when empty). Use `Container`/`Markdown` for rich content.
-11. **Typed param alias**: Define `type MyToolParams = Static<typeof parameters>` at the top of each tool file. Use it everywhere instead of repeating `Static<typeof parameters>`.
+11. **Tool definitions use `defineTool()`**: Define standalone tools with `defineTool({...})` from `@mariozechner/pi-coding-agent` so `execute`, `renderCall`, and `renderResult` infer typed params from the `parameters` field without casts or explicit generic arguments. Also define `type MyToolParams = Static<typeof parameters>` at the top of each tool file and use it everywhere.
 12. **Tool metadata**: Every tool must have `label` (required). Add `promptSnippet` for system prompt tool listing. Add `promptGuidelines` for usage instructions, but write them as standalone global bullets that name the exact tool. These replace system-prompt hooks for simple tools.
 13. **Output truncation**: For tools returning large text, use `truncateHead()` from `@mariozechner/pi-coding-agent`. Write full content to temp file. Append footer with line/byte counts and temp file path.
 14. **Core/lib pattern**: Extract domain logic into modules (`client.ts`, `manager.ts`) that don't import from Pi. Tools are thin wrappers. Core modules are unit-testable with vitest.
 15. **Humanize messages**: Show display names first, IDs in dim/parens. `"Started \"backend\" (proc_42)"` not `"Started proc_42"`.
-16. **peerDependencies**: Pi injects `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`, and `@sinclair/typebox` via jiti at runtime. Any of these that your extension imports must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta`. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`.
+16. **peerDependencies**: Pi injects `@mariozechner/pi-coding-agent`, `@mariozechner/pi-tui`, `@mariozechner/pi-ai`, and `typebox` via jiti at runtime. Any of these that your extension imports must be listed in `peerDependencies` with `optional: true` in `peerDependenciesMeta`. Without `optional: true`, npm 7+ auto-installs peers, adding hundreds of packages on every install even though Pi already provides them. Keep them in `devDependencies` too for local type checking — `pnpm install` installs peers, so development is unaffected. Use `>=CURRENT_VERSION` range, not `*`. Pi 0.69+ uses `typebox` 1.x; do not import from `@sinclair/typebox`.
 17. **Check existing components**: Before creating a new TUI component, check if `pi-tui` or `pi-coding-agent` already exports one that fits.
 18. **Forward abort signals**: Always pass `signal` through to `fetch()`, `pi.exec()`, and API client methods. A tool that ignores its signal prevents cancellation from reaching the underlying operation. Never prefix with `_signal` unless the tool truly has no async work to cancel.
 19. **Never use Node child_process APIs**: Do not use `child_process.exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, or `execFileSync` to run binaries or shell scripts. Always use `pi.exec()`. `pi.exec` handles CWD, signal propagation, and output capture consistently. The only exception is if you need a long-lived streaming process with stdin/stdout piping that `pi.exec` cannot support — document the reason in code comments.
 20. **Never use `homedir()` for pi paths**: Use the SDK helpers from `@mariozechner/pi-coding-agent` instead. They respect the `PI_CODING_AGENT_DIR` env var which is used for testing and custom setups. Key functions: `getAgentDir()`, `getSettingsPath()`, `getSessionsDir()`, `getPromptsDir()`, `getToolsDir()`, `getCustomThemesDir()`, `getModelsPath()`, `getAuthPath()`, `getBinDir()`, `getDebugLogPath()`. All exported from the main package entry point.
 21. **Config uses the interface pattern**: `config.ts` defines two TypeScript interfaces (`RawConfig` with all fields optional, `ResolvedConfig` with all fields required) and a `ConfigLoader<Raw, Resolved>` instance. Do not use TypeBox schemas for config types. For config migrations, use `ConfigLoader` `migrations` option. For settings UI, use `registerSettingsCommand` from `@aliou/pi-utils-settings`.
 22. **Entry point deviations must be documented**: The standard entry point pattern is load config → check `enabled` → register. Deviations (no config, API-key-first ordering, no `enabled` toggle) are acceptable when justified, but must be noted in `AGENTS.md`.
+23. **Session replacement uses `withSession`**: After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, captured old `pi`, command `ctx`, and `ctx.sessionManager` are stale and may throw. Put post-switch work in `withSession` and use only that fresh callback context.
 
 ## Checklist
 
 Before considering an extension complete:
 
 - [ ] Entry point has correct default export signature.
+- [ ] Every standalone tool is wrapped in `defineTool()` so typed params flow into `execute`, `renderCall`, and `renderResult` without casts.
 - [ ] All tools have correct execute parameter order.
 - [ ] All `onUpdate` calls use optional chaining.
 - [ ] No `.js` file extensions in imports.
@@ -155,3 +157,5 @@ Before considering an extension complete:
 - [ ] `config.ts` uses `ConfigLoader<Raw, Resolved>` with TypeScript interfaces, not TypeBox schemas.
 - [ ] If deviating from the standard entry point pattern (load-config → check-enabled → register), the reason is documented in `AGENTS.md`.
 - [ ] Settings use `registerSettingsCommand` from `@aliou/pi-utils-settings` when the extension has user-configurable settings.
+- [ ] New code imports TypeBox from `typebox`, not `@sinclair/typebox`.
+- [ ] Any session replacement code uses `withSession` for post-switch work and does not reuse stale session-bound objects.

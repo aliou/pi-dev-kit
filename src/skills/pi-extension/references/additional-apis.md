@@ -94,10 +94,14 @@ Setting active tools restricts which tools the LLM can use.
 
 ```typescript
 // Set the active model
-pi.setModel("anthropic/claude-sonnet-4-20250514");
+const model = ctx.modelRegistry.find("anthropic", "claude-sonnet-4-5");
+if (model) {
+  const success = await pi.setModel(model);
+  if (!success) ctx.ui.notify("No API key for this model", "error");
+}
 
 // Get/set thinking level
-const level = pi.getThinkingLevel(); // "none" | "low" | "medium" | "high"
+const level = pi.getThinkingLevel(); // "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
 pi.setThinkingLevel("high");
 ```
 
@@ -112,7 +116,7 @@ pi.on("before_agent_start", async (_event, ctx) => {
 });
 ```
 
-The system prompt resets each turn, so modifications are not cumulative.
+The system prompt resets each turn, so modifications are not cumulative. In `before_agent_start`, `ctx.getSystemPrompt()` reflects prompt changes from earlier handlers, and the event includes `systemPromptOptions` for structured prompt inputs.
 
 ### Guidance Injection Pattern
 
@@ -239,6 +243,23 @@ Call `registerGuidance(pi)` from your hooks setup function.
 - `pi-linear` — Uses `guidance.ts` + `before_agent_start` hook (cross-tool workflow instructions + dynamic workspace context).
 - `pi-processes` — Uses both: `promptSnippet`/`promptGuidelines` on tools for basic guidance, plus system prompt hook for complex multi-tool orchestration patterns.
 
+## Session Replacement
+
+`ctx.newSession()`, `ctx.fork()`, and `ctx.switchSession()` invalidate captured pre-replacement session-bound objects after the replacement. Use `withSession` for post-switch work and only use the fresh callback context there.
+
+```typescript
+await ctx.newSession({
+  setup: async (sm) => {
+    sm.appendCustomMessageEntry("my-source", "Seed context", true);
+  },
+  withSession: async (ctx) => {
+    await ctx.sendUserMessage("Continue from the new session");
+  },
+});
+```
+
+Do not reuse captured `pi`, command `ctx`, or `ctx.sessionManager` after a session replacement.
+
 ## Compaction
 
 Trigger compaction programmatically:
@@ -303,4 +324,22 @@ ctx.ui.setEditorComponent((tui, theme, kb) => {
 
 // Prefill the editor
 ctx.ui.setEditorText("Prefilled content");
+
+// Customize the streaming working indicator
+ctx.ui.setWorkingIndicator({ frames: [ctx.ui.theme.fg("accent", "●")] }); // static
+ctx.ui.setWorkingIndicator({ frames: [] }); // hidden
+ctx.ui.setWorkingIndicator(); // restore default
+
+// Stack autocomplete on top of built-in slash/path completion
+ctx.ui.addAutocompleteProvider((current) => ({
+  async getSuggestions(lines, cursorLine, cursorCol) {
+    const beforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
+    const match = beforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/);
+    if (!match) return current.getSuggestions(lines, cursorLine, cursorCol);
+    return [{ label: `#${match[1]}123`, value: `#${match[1]}123` }];
+  },
+  shouldTriggerFileCompletion(input) {
+    return current.shouldTriggerFileCompletion?.(input) ?? false;
+  },
+}));
 ```

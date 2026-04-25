@@ -11,14 +11,14 @@ Hooks let extensions react to lifecycle events. They are registered with `pi.on(
 | `session_start` | Session starts, reloads, or is replaced | No | `{ reason: "startup" \| "reload" \| "new" \| "resume" \| "fork", previousSessionFile? }` |
 | `session_before_switch` | Before `/new` or `/resume` replaces the current session | Yes (`{ cancel: true }`) | `{ reason: "new" \| "resume", targetSessionFile? }` |
 | `session_before_fork` | Before forking a session | Yes (`{ cancel: true }`) | `{ entryId }` |
-| `session_shutdown` | Current session runtime is shutting down or being replaced | No | `{}` |
+| `session_shutdown` | Current session runtime is shutting down or being replaced | No | `{ reason: "quit" | "reload" | "new-session" | "resume" | "fork", targetSessionFile? }` |
 | `session_before_compact` | Before compaction | Yes (cancel or provide custom compaction) | event-specific compaction data |
 
 ### Agent Events
 
 | Event | When | Payload |
 |---|---|---|
-| `before_agent_start` | Before agent turn starts | `{}` |
+| `before_agent_start` | Before agent turn starts | `{ systemPrompt, systemPromptOptions }` |
 | `agent_start` | Agent turn started | `{}` |
 | `turn_start` | Turn begins processing | `{}` |
 | `turn_end` | Turn finishes processing | `{}` |
@@ -133,7 +133,7 @@ pi.on("user_bash", async (event, ctx) => {
 
 This event fires before each agent turn. It is commonly used to modify the system prompt.
 
-The handler receives a `BeforeAgentStartEvent` with a `systemPrompt` field containing the current prompt. Return a `{ systemPrompt }` object to replace it. If multiple extensions return a modified prompt, they are chained.
+The handler receives a `BeforeAgentStartEvent` with `systemPrompt` and `systemPromptOptions` fields. `systemPromptOptions` exposes the structured inputs used to build the prompt. Return a `{ systemPrompt }` object to replace it. If multiple extensions return a modified prompt, they are chained. `ctx.getSystemPrompt()` reflects changes made by earlier `before_agent_start` handlers.
 
 ```typescript
 pi.on("before_agent_start", async (event) => {
@@ -151,7 +151,7 @@ To access flags inside hooks, use `pi.getFlag()` (see `references/additional-api
 
 ## Bash Spawn Hook (Command Rewriting)
 
-The `createBashTool` function lets you replace the built-in bash tool with one that transparently rewrites commands before shell execution. This is different from `tool_call` blocking -- the agent never sees that the command was rewritten.
+The `createBashTool(cwd, options)` function lets you replace the built-in bash tool with one that transparently rewrites commands before shell execution. Always pass an explicit cwd. This is different from `tool_call` blocking -- the agent never sees that the command was rewritten.
 
 Use spawn hooks when you have a clear rewrite target (e.g. `npm` -> `pnpm`). Use `tool_call` blocking when you need to stop a command entirely or show a confirmation dialog.
 

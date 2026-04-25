@@ -16,15 +16,25 @@ import type {
   Theme,
   ToolRenderResultOptions,
 } from "@mariozechner/pi-coding-agent";
-import { getMarkdownTheme, keyHint, truncateHead, formatSize } from "@mariozechner/pi-coding-agent";
+import { defineTool, getMarkdownTheme, keyHint, truncateHead, formatSize } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@sinclair/typebox";
+import { type Static, Type } from "typebox";
 ```
 
 ## Registration
 
 ```typescript
-const myTool = {
+const parameters = Type.Object({
+  query: Type.String({ description: "Search query" }),
+  limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
+});
+
+type MyToolParams = Static<typeof parameters>;
+interface MyToolDetails {
+  results: string[];
+}
+
+const myTool = defineTool({
   name: "my_tool",
   label: "My Tool", // Required: human-readable name for UI
   description: "What this tool does. The LLM reads this to decide when to call it.",
@@ -33,17 +43,14 @@ const myTool = {
     "Use my_tool when the user asks about search.",
     "Prefer specific queries over broad ones when calling my_tool.",
   ],
-  parameters: Type.Object({
-    query: Type.String({ description: "Search query" }),
-    limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
-  }),
+  parameters,
 
   async execute(
-    toolCallId: string,
-    params: MyToolParams,
-    signal: AbortSignal | undefined,
-    onUpdate: AgentToolUpdateCallback<MyToolDetails> | undefined,
-    ctx: ExtensionContext,
+    toolCallId,
+    params,
+    signal,
+    onUpdate,
+    ctx,
   ): Promise<AgentToolResult<MyToolDetails>> {
     const results = await doSomething(params.query, params.limit);
     return {
@@ -51,13 +58,7 @@ const myTool = {
       details: { results },
     };
   },
-};
-
-// Typed param alias - define once, use everywhere
-type MyToolParams = Static<typeof myTool.parameters>;
-interface MyToolDetails {
-  results: string[];
-}
+});
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool(myTool);
@@ -78,7 +79,11 @@ export default function (pi: ExtensionAPI) {
 | `renderCall` | `function` | No | Custom call rendering |
 | `renderResult` | `function` | No | Custom result rendering |
 
-## Typed Param Alias
+## `defineTool()` and Typed Param Alias
+
+Use `defineTool()` for standalone tool definitions. It infers parameter types from the `parameters` field and preserves them for `execute`, `renderCall`, and `renderResult` so you do not need casts or explicit generic arguments at registration/rendering boundaries.
+
+Inside the `defineTool({...})` object, do not annotate callback parameter types unless TypeScript actually needs help. The contextual type from Pi already provides `toolCallId`, `params`, `signal`, `onUpdate`, `ctx`, `options`, and `theme`. If you want `renderResult` to see a specific `details` shape, annotate the `execute` return type as `Promise<AgentToolResult<MyToolDetails>>`; that is the useful annotation.
 
 Define a type alias at the top of your file instead of repeating `Static<typeof parameters>`:
 
@@ -89,20 +94,28 @@ const parameters = Type.Object({
 });
 
 type MyToolParams = Static<typeof parameters>;
-// Use MyToolParams everywhere: execute params, renderCall args, context.args, etc.
+// Use MyToolParams in helper functions and exported action APIs. Inside defineTool callbacks, prefer inference.
 ```
 
 ## Execute Signature
 
 ```typescript
+execute(toolCallId, params, signal, onUpdate, ctx): Promise<AgentToolResult<TDetails>>
+```
+
+Pi's `ToolDefinition` type is:
+
+```typescript
 execute(
   toolCallId: string,
-  params: Static<TParams>,      // Typed from the parameters schema
+  params: Static<TParams>,
   signal: AbortSignal | undefined,
   onUpdate: AgentToolUpdateCallback<TDetails> | undefined,
   ctx: ExtensionContext,
 ): Promise<AgentToolResult<TDetails>>
 ```
+
+You usually do not need to write those parameter types yourself inside `defineTool()`.
 
 **Parameter order matters.** The signal comes before onUpdate.
 
@@ -126,11 +139,13 @@ Prompt metadata is not inherited automatically when you override a built-in tool
 return {
   content: (TextContent | ImageContent)[],  // Content blocks sent to the LLM
   details?: TDetails,                       // Arbitrary data available in the renderer
+  terminate?: boolean,                      // Optional: skip follow-up LLM call when all finalized results in the batch terminate
 };
 ```
 
 - `content` is what the LLM sees. Each block is `{ type: "text", text: "..." }` or an image. Keep it structured and concise.
 - `details` is what the renderer sees. Put rich data here for custom display.
+- `terminate: true` is for final/structured-output tools that should end the turn without an automatic follow-up LLM call. It only applies when every finalized tool result in the current batch also returns `terminate: true`.
 
 Common pattern:
 
@@ -221,10 +236,10 @@ Both approaches work. Approach 1 is more common in published extensions. Approac
 
 ## Parameters Schema
 
-Use TypeBox (`Type.*`) for parameter schemas. The LLM sees the schema to know what arguments to provide.
+Use TypeBox 1.x (`Type.*`) from `typebox` for parameter schemas. The LLM sees the schema to know what arguments to provide. Do not import from `@sinclair/typebox` in new extensions.
 
 ```typescript
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 // Required string
 Type.String({ description: "File path to read" })
@@ -838,7 +853,7 @@ import type {
 } from "@mariozechner/pi-coding-agent";
 import { keyHint, formatSize } from "@mariozechner/pi-coding-agent";
 import { Container, Text } from "@mariozechner/pi-tui";
-import { type Static, Type } from "@sinclair/typebox";
+import { type Static, Type } from "typebox";
 
 // Schema
 const parameters = Type.Object({

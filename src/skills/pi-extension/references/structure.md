@@ -80,13 +80,13 @@ Not every extension needs every directory. A simple extension with one tool migh
     "@mariozechner/pi-coding-agent": ">=CURRENT_VERSION",
     "@mariozechner/pi-ai": ">=CURRENT_VERSION",
     "@mariozechner/pi-tui": ">=CURRENT_VERSION",
-    "@sinclair/typebox": ">=0.34.0"
+    "typebox": ">=1.1.24"
   },
   "peerDependenciesMeta": {
     "@mariozechner/pi-coding-agent": { "optional": true },
     "@mariozechner/pi-ai": { "optional": true },
     "@mariozechner/pi-tui": { "optional": true },
-    "@sinclair/typebox": { "optional": true }
+    "typebox": { "optional": true }
   },
   "devDependencies": {
     "@aliou/biome-plugins": "^0.3.0",
@@ -95,7 +95,7 @@ Not every extension needs every directory. A simple extension with one tool migh
     "@mariozechner/pi-ai": "CURRENT_VERSION",
     "@mariozechner/pi-coding-agent": "CURRENT_VERSION",
     "@mariozechner/pi-tui": "CURRENT_VERSION",
-    "@sinclair/typebox": "0.34.41",
+    "typebox": "1.1.24",
     "@types/node": "^25.0.0",
     "husky": "^9.0.0",
     "typescript": "^5.8.0"
@@ -120,7 +120,7 @@ Not every extension needs every directory. A simple extension with one tool migh
 }
 ```
 
-Replace `CURRENT_VERSION` with the actual installed version of pi (e.g., `0.52.7`).
+Replace `CURRENT_VERSION` with the actual installed version of pi (e.g., `0.70.0`).
 
 Only include `pi` sub-fields that are actually used. `skills`, `themes`, `prompts`, and `video` are optional.
 
@@ -141,9 +141,9 @@ Only include `pi` sub-fields that are actually used. `skills`, `themes`, `prompt
 - `@mariozechner/pi-coding-agent` — core types, utilities, and extension APIs
 - `@mariozechner/pi-tui` — TUI components
 - `@mariozechner/pi-ai` — AI utilities (`StringEnum`, etc.)
-- `@sinclair/typebox` — schema definitions for tool parameters and related types
+- `typebox` — TypeBox 1.x schema definitions for tool parameters and related types
 
-List any of these you import at runtime in `peerDependencies` as optional peers. This prevents npm from installing duplicate copies when a user installs your extension. Use `>=` with the current version when creating.
+List any of these you import at runtime in `peerDependencies` as optional peers. Pi 0.69+ uses `typebox` 1.x; do not import from `@sinclair/typebox` in new code. This prevents npm from installing duplicate copies when a user installs your extension. Use `>=` with the current version when creating.
 
 **`peerDependenciesMeta`**: Marks peer dependencies as optional. Without `optional: true`, npm 7+ auto-installs peers that are not already present, which defeats the purpose — Pi already provides them.
 
