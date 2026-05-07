@@ -1,82 +1,71 @@
 # Mode Awareness
 
-Pi runs in different modes. Extensions must handle all of them gracefully.
+Pi extensions must behave correctly in Interactive, RPC, JSON, and Print modes.
 
 ## Modes
 
-| Mode | `ctx.hasUI` | Description |
-|---|---|---|
-| **Interactive** | `true` | Full TUI. Normal terminal usage. |
-| **RPC** (`--mode rpc`) | `true` | JSON protocol. A host application handles UI. Dialogs work via request/response. |
-| **Print** (`-p`, `--mode json`) | `false` | No UI. Extensions run but cannot prompt the user. |
+| Mode | `ctx.hasUI` | Notes |
+|---|---:|---|
+| Interactive | `true` | Full terminal UI. |
+| RPC (`--mode rpc`) | `true` | Host handles dialogs through JSON protocol. TUI-only methods degrade. |
+| JSON (`--mode json`) | `false` | Event stream to stdout; no extension UI. |
+| Print (`-p`) | `false` | One-shot prompt; no extension UI. |
 
-Important nuance: in RPC mode, `ctx.hasUI` is `true`, but TUI-only APIs are degraded.
+Important nuance: RPC has `ctx.hasUI === true` because dialog and fire-and-forget methods work through the extension UI protocol. But `ctx.ui.custom()` and other TUI-only methods do not work in RPC.
 
-## Method Behavior by Mode
+## Dialog Methods
 
-### Dialog Methods (return a value)
+These return values and may need mode-specific behavior.
 
-These methods prompt the user and return a result. Their behavior varies by mode.
-
-| Method | Interactive | RPC | Print |
+| Method | Interactive | RPC | JSON/Print |
 |---|---|---|---|
-| `ctx.ui.select()` | TUI picker | JSON request to host | Returns `undefined` |
-| `ctx.ui.confirm()` | TUI dialog | JSON request to host | Returns `false` |
-| `ctx.ui.input()` | TUI text input | JSON request to host | Returns `undefined` |
-| `ctx.ui.editor()` | TUI editor | JSON request to host | Returns `undefined` |
-| `ctx.ui.custom()` | TUI component | Returns `undefined` | Returns `undefined` |
+| `ctx.ui.select()` | TUI picker | JSON request to host | `undefined` |
+| `ctx.ui.confirm()` | TUI dialog | JSON request to host | `false` |
+| `ctx.ui.input()` | TUI input | JSON request to host | `undefined` |
+| `ctx.ui.editor()` | TUI editor | JSON request to host | `undefined` |
+| `ctx.ui.custom()` | Custom TUI component | `undefined` | `undefined` |
 
-Key observation: `custom()` returns `undefined` in both RPC and Print modes. All other dialog methods work in RPC (the host presents them to the user).
-
-Second key observation: `custom()` can also resolve to `undefined` in Interactive mode if your component calls `done(undefined)`. So `result === undefined` is not a reliable mode detector by itself.
-
-### Fire-and-Forget Methods (no return value)
-
-These methods are safe to call unconditionally in any mode. In modes that do not support them, they are silently ignored.
-
-| Method | Interactive | RPC | Print |
-|---|---|---|---|
-| `ctx.ui.notify()` | TUI notification | JSON event to host | No-op |
-| `ctx.ui.setStatus()` | Status bar | JSON event to host | No-op |
-| `ctx.ui.setWidget()` | Widget area | JSON event to host (string arrays only) | No-op |
-| `ctx.ui.setTitle()` | Window title | JSON event to host | No-op |
-| `ctx.ui.setEditorText()` | Sets editor content | JSON event to host | No-op |
-| `ctx.ui.setFooter()` | Footer area | No-op | No-op |
-| `ctx.ui.setHeader()` | Header area | No-op | No-op |
-| `ctx.ui.setWorkingMessage()` | Loader text | No-op | No-op |
-| `ctx.ui.setEditorComponent()` | Custom editor | No-op | No-op |
-
-You never need to check `ctx.hasUI` before calling fire-and-forget methods.
-
-## When to Check ctx.hasUI
-
-Check `ctx.hasUI` when a dialog method gates behavior. If the dialog result determines what happens next (for example, blocking a tool call or cancelling a session switch), you must handle the case where the dialog cannot run.
+Check `ctx.hasUI` when a dialog gates behavior. If there is no UI, choose a safe default.
 
 ```typescript
-// tool_call handler: must decide to block or allow
 pi.on("tool_call", async (event, ctx) => {
-  if (isDangerous(event)) {
-    if (!ctx.hasUI) {
-      // Print mode: no way to ask the user, block by default
-      return { block: true, reason: "Dangerous command blocked (no UI)" };
-    }
+  if (!isDangerous(event)) return;
 
-    const choice = await ctx.ui.select("Dangerous command detected", ["Allow", "Block"]);
-    if (choice !== "Allow") {
-      return { block: true, reason: "Blocked by user" };
-    }
+  if (!ctx.hasUI) {
+    return { block: true, reason: "Dangerous action blocked because no UI is available." };
   }
-  return undefined;
+
+  const ok = await ctx.ui.confirm("Dangerous action", "Allow it?");
+  if (!ok) return { block: true, reason: "Blocked by user" };
 });
 ```
 
-You do not need to check `ctx.hasUI` for:
-- Fire-and-forget calls (`notify`, `setStatus`, `setWidget`, etc.).
-- Dialogs where the default return value is acceptable (for example, a non-critical confirm that defaults to `false`).
+## Fire-and-Forget Methods
 
-## The Three-Tier Pattern for Custom Components
+These are safe to call without guards. Unsupported modes ignore them or forward them to the RPC host.
 
-When a command uses `ctx.ui.custom()` for a rich TUI display, handle three tiers:
+| Method | Interactive | RPC | JSON/Print |
+|---|---|---|---|
+| `notify()` | TUI notification | JSON event | No-op |
+| `setStatus()` | Footer status | JSON event | No-op |
+| `setWidget()` string arrays | Widget | JSON event | No-op |
+| `setTitle()` | Terminal title | JSON event | No-op |
+| `setEditorText()` | Editor text | JSON event | No-op |
+| `pasteToEditor()` | Paste handling | Set editor text | No-op |
+| `setWorkingMessage()` | Loader text | No-op | No-op |
+| `setWorkingVisible()` | Loader visibility | No-op | No-op |
+| `setWorkingIndicator()` | Loader indicator | No-op | No-op |
+| `setFooter()` | Custom footer | No-op | No-op |
+| `setHeader()` | Custom header | No-op | No-op |
+| `setEditorComponent()` | Custom editor | No-op | No-op |
+| `setToolsExpanded()` | Tool expansion | No-op | No-op |
+| Theme APIs | Full | Mostly unavailable | No-op/unavailable |
+
+Component widgets are TUI-only; string-array widgets are portable to RPC.
+
+## Three-Tier Pattern for `ctx.ui.custom()`
+
+Use this for commands that display rich TUI components.
 
 ```typescript
 pi.registerCommand("quotas", {
@@ -84,19 +73,18 @@ pi.registerCommand("quotas", {
   handler: async (_args, ctx) => {
     const data = await fetchQuotas();
 
-    // Tier 1: Print mode -- no UI at all
+    // Tier 1: JSON/Print, no UI.
     if (!ctx.hasUI) {
       console.log(formatPlain(data));
       return;
     }
 
-    // Tier 2: Interactive mode -- full TUI component.
-    // Use an explicit non-undefined sentinel for close/cancel.
-    const result = await ctx.ui.custom<"closed">((tui, theme, _kb, done) => {
+    // Tier 2: Interactive TUI. Use an explicit non-undefined sentinel.
+    const result = await ctx.ui.custom<"closed">((_tui, theme, _keybindings, done) => {
       return new QuotasDisplay(theme, data, () => done("closed"));
     });
 
-    // Tier 3: RPC mode -- custom() returns undefined by design.
+    // Tier 3: RPC. custom() returns undefined.
     if (result === undefined) {
       ctx.ui.notify(formatPlain(data), "info");
     }
@@ -104,53 +92,55 @@ pi.registerCommand("quotas", {
 });
 ```
 
-Since `select`, `confirm`, `input`, and `notify` all work in RPC mode (forwarded to the host via JSON protocol), use them as the RPC fallback. Choose based on UX:
+Do not use `done(undefined)` for normal interactive close paths when you use `result === undefined` as the RPC fallback detector. Use `null`, `false`, or a string sentinel.
 
-- **`notify`**: Transient feedback or displaying data. Best for most display-only commands.
-- **`select`**: When the custom component is a picker/selector. The RPC host presents a list.
-- **`confirm`**: When the custom component is a confirmation dialog (for example, permission gate).
-- **Notify "requires interactive mode"**: When the custom component is too complex to reduce (for example, settings editor, process manager).
+## Fallback Choices
 
-Use `sendMessage` + `registerMessageRenderer` only when the result must persist in session history. See `references/messages.md`.
+- Use `notify` for display-only results.
+- Use `select` when the rich component is a picker.
+- Use `confirm` when the rich component is a yes/no gate.
+- Use `input`/`editor` when text entry is enough.
+- Use `sendMessage` + `registerMessageRenderer` when output should persist in session history.
+- Tell the user interactive mode is required when the UI cannot be reduced safely.
 
-### Example: Selector Fallback
+## Examples
+
+### Selector fallback
 
 ```typescript
-const result = await ctx.ui.custom<string | null>((_tui, _theme, _kb, done) => {
+const result = await ctx.ui.custom<string | null>((_tui, _theme, _keybindings, done) => {
   return new FancyPicker(items, done); // done(value) or done(null)
 });
 
-// RPC fallback: use select dialog
 if (result === undefined) {
-  const selected = await ctx.ui.select("Pick an item", items.map((i) => i.label));
-  // ... handle selected
+  const selected = await ctx.ui.select("Pick an item", items.map((item) => item.label));
+  // Handle selected.
 }
 ```
 
-### Example: Confirmation Fallback
+### Confirmation fallback
 
 ```typescript
-// In a tool_call handler:
-if (!ctx.hasUI) {
-  return { block: true, reason: "No UI to confirm" };
-}
+if (!ctx.hasUI) return { block: true, reason: "No UI to confirm" };
 
-const proceed = await ctx.ui.custom<boolean>((_tui, theme, _kb, done) => {
-  return new ConfirmDialog(theme, message, done); // done(true|false)
+const proceed = await ctx.ui.custom<boolean | null>((_tui, theme, _keybindings, done) => {
+  return new ConfirmDialog(theme, message, done); // done(true), done(false), or done(null)
 });
 
-// RPC fallback: custom() returns undefined, so treat as "not approved".
-if (proceed !== true) {
+if (proceed === undefined) {
+  const confirmed = await ctx.ui.confirm("Allow action?", message);
+  if (!confirmed) return { block: true, reason: "Blocked" };
+} else if (proceed !== true) {
   return { block: true, reason: "Blocked" };
 }
 ```
 
 ## Guidelines
 
-1. Never assume Interactive mode. Always consider what happens in RPC and Print.
-2. Fire-and-forget methods are always safe. Use them freely.
-3. Guard dialog methods that gate behavior with `ctx.hasUI` checks.
-4. Always provide a fallback for `ctx.ui.custom()` because it returns `undefined` in RPC and Print.
-5. Do not use `done(undefined)` for normal interactive close paths if you need to detect RPC fallback.
-6. For `tool_call` handlers, decide a safe default when there is no UI (usually block).
-7. Test your extension in at least Interactive and Print modes. If you use `custom()`, test RPC fallback explicitly.
+1. Never assume interactive mode.
+2. Fire-and-forget methods are safe without `ctx.hasUI` guards.
+3. Guard dialogs that decide whether to proceed.
+4. `ctx.ui.custom()` always needs fallback.
+5. Use explicit sentinels instead of `done(undefined)`.
+6. For security/safety gates, default to blocking when there is no UI.
+7. Test interactive and print modes. Test RPC fallback for `custom()`.

@@ -51,7 +51,7 @@ Returns the version of the currently running Pi instance.
 
 ### `pi_docs`
 
-Lists all Pi documentation files from the Pi installation: `README.md`, individual files in `docs/`, and the `examples/` directory path.
+Lists Pi markdown documentation files from the Pi installation: `README.md`, `docs/`, and `examples/`.
 
 ### `pi_changelog`
 
@@ -59,4 +59,4 @@ Parses the Pi changelog and returns entries for a specific version (or the lates
 
 ## Compatibility
 
-Compatible with Pi 0.50.x and 0.51.0+. Tools that need the extension context use a runtime shim to handle the execute signature difference between versions.
+Tested against Pi 0.74.0 and the `@earendil-works/*` Pi package namespace.

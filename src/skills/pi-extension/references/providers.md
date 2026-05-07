@@ -1,15 +1,16 @@
 # Providers
 
-Providers add LLM backends to pi. They connect pi to model APIs, proxies, gateways, and custom streaming implementations.
+Providers add or override LLM backends through `pi.registerProvider(name, config)`. Use them for proxies, custom endpoints, OAuth/SSO, and custom streaming APIs.
 
-This reference tracks the current `pi.registerProvider(name, config)` API from pi-mono. For full provider details and advanced examples, also read pi-mono `packages/coding-agent/docs/custom-provider.md`.
+Read Pi `docs/custom-provider.md` and `docs/models.md` before implementing a provider.
 
-## Registration
+## Quick Registration
 
 ```typescript
-import type { ExtensionAPI, ProviderConfig } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ProviderConfig } from "@earendil-works/pi-coding-agent";
 
-const myProviderConfig: ProviderConfig = {
+const myProvider: ProviderConfig = {
+  name: "My Provider",
   baseUrl: "https://api.example.com/v1",
   apiKey: "MY_API_KEY",
   api: "openai-completions",
@@ -26,134 +27,292 @@ const myProviderConfig: ProviderConfig = {
   ],
 };
 
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider("my-provider", myProviderConfig);
+export default function providersExtension(pi: ExtensionAPI) {
+  pi.registerProvider("my-provider", myProvider);
 }
 ```
 
-## Common Registration Patterns
+Use legacy `@mariozechner/*` imports only when the target `@earendil-works/*` package is not available yet.
 
-### Override an existing provider
+## Async Model Discovery
 
-```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider("anthropic", {
-    baseUrl: "https://proxy.example.com",
-  });
-}
-```
-
-Use this when you want to keep the built-in provider and model list, but change the endpoint and/or headers.
-
-### Register a new provider
+If models come from a remote endpoint, fetch them in an async extension factory, not `session_start`. Pi waits for the factory before startup continues, so models are available during startup and `pi --list-models`.
 
 ```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+export default async function providersExtension(pi: ExtensionAPI) {
+  const response = await fetch("http://localhost:1234/v1/models");
+  const payload = (await response.json()) as {
+    data: Array<{ id: string; name?: string; context_window?: number; max_tokens?: number }>;
+  };
 
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider("my-provider", {
-    baseUrl: "https://api.example.com/v1",
-    apiKey: "MY_API_KEY",
+  pi.registerProvider("local-openai", {
+    name: "Local OpenAI",
+    baseUrl: "http://localhost:1234/v1",
+    apiKey: "LOCAL_OPENAI_API_KEY",
     api: "openai-completions",
-    models: [
-      {
-        id: "my-model",
-        name: "My Model",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0.5, output: 1.5, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128000,
-        maxTokens: 8192,
-      },
-    ],
+    models: payload.data.map((model) => ({
+      id: model.id,
+      name: model.name ?? model.id,
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: model.context_window ?? 128000,
+      maxTokens: model.max_tokens ?? 4096,
+    })),
   });
 }
 ```
 
-### Unregister a provider
+## Override Existing Providers
+
+When only `baseUrl` and/or `headers` are provided, Pi keeps built-in models and auth.
+
+```typescript
+pi.registerProvider("anthropic", {
+  baseUrl: "https://proxy.example.com",
+});
+
+pi.registerProvider("openai", {
+  headers: {
+    "X-Custom-Header": "MY_HEADER_ENV_OR_LITERAL",
+  },
+});
+```
+
+## Unregister Providers
 
 ```typescript
 pi.unregisterProvider("my-provider");
 ```
 
-This takes effect immediately at runtime.
+Unregistering removes dynamic models, API key fallback, OAuth registration, and stream handlers. Built-in behavior overridden by that provider is restored.
 
 ## ProviderConfig Fields
 
-| Field | Type | Description |
-|---|---|---|
-| `baseUrl` | `string` | Base URL for the provider or proxy. |
-| `headers` | `Record<string, string>` | Optional static headers to add to requests. |
-| `apiKey` | `string` | Environment variable name containing the API key. |
-| `api` | `"openai-completions" \| "openai-responses"` | Compatibility mode for request/response handling. |
-| `models` | `ProviderModelConfig[]` | Model definitions exposed by this provider. |
-| `streamSimple` | `function` | Optional custom streaming implementation for non-standard APIs. |
-| `oauth` | `object` | Optional OAuth config for providers that need browser-based auth. |
+| Field | Notes |
+|---|---|
+| `name` | Display name for `/login` and UI. |
+| `baseUrl` | Endpoint URL. Required when defining models. |
+| `apiKey` | API key, env var name, or auth value. Required unless `oauth` handles auth. |
+| `api` | API type. Required at provider or model level when defining models. |
+| `headers` | Static custom headers. Values can be env var names. |
+| `authHeader` | When `true`, Pi sends `Authorization: Bearer <key>`. |
+| `models` | Replaces registered models for this provider when provided. |
+| `oauth` | Adds `/login` support. |
+| `streamSimple` | Custom streaming implementation for non-standard APIs. |
 
-Use the built-in OpenAI-compatible path when possible. Reach for `streamSimple` only when the upstream API is not compatible enough.
+Supported API types include:
 
-## Model Definition
+- `anthropic-messages`
+- `openai-completions`
+- `openai-responses`
+- `azure-openai-responses`
+- `openai-codex-responses`
+- `mistral-conversations`
+- `google-generative-ai`
+- `google-vertex`
+- `bedrock-converse-stream`
 
-The exact model type has more fields, but these are the ones you will usually need:
+Prefer a built-in API type. Use `streamSimple` only when the upstream API cannot be adapted with config and compatibility flags.
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string` | Model identifier within the provider config. |
-| `name` | `string` | Display name shown in model selection UI. |
-| `reasoning` | `boolean` | Whether the model is a reasoning model. |
-| `input` | `Array<"text" \| "image" \| "audio" \| "pdf">` | Input modalities supported by the model. |
-| `cost` | `object` | `{ input, output, cacheRead, cacheWrite }` cost values. |
-| `contextWindow` | `number` | Maximum context window. |
-| `maxTokens` | `number` | Maximum output tokens. |
+## Model Fields
 
-## API Key Gating
+| Field | Required | Notes |
+|---|---:|---|
+| `id` | Yes | Model ID sent to the API. |
+| `name` | Yes for provider extensions | Human-readable display name. |
+| `api` | No | Model-level API override. |
+| `baseUrl` | No | Model-level endpoint override. |
+| `reasoning` | Yes | Whether extended thinking is supported. |
+| `thinkingLevelMap` | No | Maps Pi thinking levels to provider-specific values; `null` hides unsupported levels. |
+| `input` | Yes | `Array<"text" | "image">`. |
+| `cost` | Yes | Per-million token cost: `{ input, output, cacheRead, cacheWrite }`. |
+| `contextWindow` | Yes | Context window in tokens. |
+| `maxTokens` | Yes | Maximum output tokens. |
+| `headers` | No | Model-specific headers. |
+| `compat` | No | Provider compatibility flags. |
 
-Provider registration and extension tool registration are separate concerns.
+### Thinking level map
 
-For providers:
-- Register the provider with `pi.registerProvider(name, config)`.
-- Point `apiKey` at the environment variable name that holds the credential.
-- If the provider should exist even when tools are disabled, still register it.
-
-For tools and commands that require the same credential:
-- Gate those registrations separately in your extension entry point.
+Use model-level `thinkingLevelMap`; do not use older `compat.reasoningEffortMap`.
 
 ```typescript
-export default function (pi: ExtensionAPI) {
-  pi.registerProvider("my-provider", {
-    baseUrl: "https://api.example.com/v1",
-    apiKey: "MY_API_KEY",
-    api: "openai-completions",
-    models: [
-      {
-        id: "my-model",
-        name: "My Model",
-        reasoning: false,
-        input: ["text"],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 128000,
-        maxTokens: 4096,
-      },
-    ],
-  });
-
-  if (!process.env.MY_API_KEY) return;
-
-  pi.registerTool(mySearchTool);
-  pi.registerCommand("quota", { handler: showQuota });
+{
+  id: "custom-reasoner",
+  name: "Custom Reasoner",
+  reasoning: true,
+  thinkingLevelMap: {
+    minimal: null,
+    low: null,
+    medium: null,
+    high: "default",
+    xhigh: "max",
+  },
+  input: ["text"],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128000,
+  maxTokens: 8192,
 }
 ```
 
-That pattern keeps provider setup accurate while still hiding tools that cannot work without credentials.
+## Compatibility Flags
 
-## When to read the upstream docs
+For OpenAI-compatible servers, use `compat` instead of custom streaming when possible.
 
-Also read pi-mono `packages/coding-agent/docs/custom-provider.md` when you need:
-- custom streaming via `streamSimple`
-- OAuth support
-- proxying existing providers
-- header injection
-- provider teardown with `pi.unregisterProvider()`
-- advanced model config details
+```typescript
+compat: {
+  supportsDeveloperRole: false,
+  supportsReasoningEffort: false,
+  supportsUsageInStreaming: false,
+  maxTokensField: "max_tokens",
+  requiresToolResultName: true,
+  thinkingFormat: "qwen-chat-template",
+  cacheControlFormat: "anthropic",
+}
+```
+
+Common flags:
+
+- `supportsDeveloperRole`
+- `supportsReasoningEffort`
+- `supportsUsageInStreaming`
+- `maxTokensField`
+- `requiresToolResultName`
+- `requiresAssistantAfterToolResult`
+- `requiresThinkingAsText`
+- `requiresReasoningContentOnAssistantMessages`
+- `thinkingFormat`
+- `cacheControlFormat`
+- `supportsStrictMode`
+- `supportsLongCacheRetention`
+- `openRouterRouting`
+- `vercelGatewayRouting`
+
+For Anthropic-compatible proxies, check `supportsEagerToolInputStreaming` and `supportsLongCacheRetention` in Pi docs.
+
+## OAuth Providers
+
+OAuth integrates with `/login`.
+
+```typescript
+import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai";
+
+pi.registerProvider("corporate-ai", {
+  name: "Corporate AI",
+  baseUrl: "https://ai.corp.com/v1",
+  api: "openai-responses",
+  models,
+  oauth: {
+    name: "Corporate AI (SSO)",
+    async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+      callbacks.onAuth({ url: "https://sso.corp.com/authorize" });
+      const code = await callbacks.onPrompt({ message: "Enter code:" });
+      return exchangeCodeForTokens(code);
+    },
+    async refreshToken(credentials) {
+      return refreshTokens(credentials.refresh);
+    },
+    getApiKey(credentials) {
+      return credentials.access;
+    },
+    modifyModels(models, credentials) {
+      return models;
+    },
+  },
+});
+```
+
+Use `modifyModels` when subscription, tenant, or region information in credentials changes model endpoints or availability.
+
+## API Key Gating
+
+Provider registration and tool registration are separate.
+
+- Register providers even when the API key is absent; Pi resolves auth and can show login/setup UI.
+- Gate tools and commands that directly call the same API.
+
+```typescript
+export default function extension(pi: ExtensionAPI) {
+  pi.registerProvider("my-provider", providerConfig);
+
+  if (!process.env.MY_API_KEY) {
+    pi.on("session_start", (_event, ctx) => {
+      ctx.ui.notify("MY_API_KEY not set. my-provider tools disabled.", "warning");
+    });
+    return;
+  }
+
+  pi.registerTool(createSearchTool(process.env.MY_API_KEY));
+}
+```
+
+Missing keys should disable affected tools gracefully, not crash extension loading.
+
+## Custom Streaming
+
+Use `streamSimple` only for non-standard APIs. Follow Pi provider implementations and tests.
+
+Basic pattern:
+
+```typescript
+import {
+  calculateCost,
+  createAssistantMessageEventStream,
+  type AssistantMessage,
+  type Context,
+  type Model,
+  type SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
+
+function streamMyProvider(model: Model<any>, context: Context, options?: SimpleStreamOptions) {
+  const stream = createAssistantMessageEventStream();
+
+  (async () => {
+    const output: AssistantMessage = {
+      role: "assistant",
+      content: [],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "stop",
+      timestamp: Date.now(),
+    };
+
+    try {
+      stream.push({ type: "start", partial: output });
+      // Push text/thinking/toolcall events as data arrives.
+      calculateCost(model, output.usage);
+      stream.push({ type: "done", reason: "stop", message: output });
+      stream.end();
+    } catch (error) {
+      output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+      output.errorMessage = error instanceof Error ? error.message : String(error);
+      stream.push({ type: "error", reason: output.stopReason, error: output });
+      stream.end();
+    }
+  })();
+
+  return stream;
+}
+```
+
+Test custom providers against streaming, abort, usage, unicode, tool call, and context-overflow cases.
+
+## Checklist
+
+- [ ] Provider uses `pi.registerProvider(name, config)`.
+- [ ] Dynamic model discovery happens in an async factory.
+- [ ] Existing provider overrides do not redefine models unless needed.
+- [ ] New models include current fields and `thinkingLevelMap` when relevant.
+- [ ] Compatibility flags are used before custom streaming.
+- [ ] OAuth providers implement login, refresh, getApiKey, and optional modifyModels.
+- [ ] Tools needing the same credential are gated separately.
+- [ ] Missing credentials produce a notification, not a crash.

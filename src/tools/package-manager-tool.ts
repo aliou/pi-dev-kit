@@ -5,9 +5,9 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import { defineTool } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 
 const Params = Type.Object({});
@@ -158,7 +158,11 @@ const packageManagerTool = defineTool({
     return renderPackageManagerCall(args, theme);
   },
 
-  renderResult(result, _options, theme) {
+  renderResult(result, options, theme) {
+    if (options.isPartial) {
+      return new Text(theme.fg("dim", "Package Manager: detecting..."), 0, 0);
+    }
+
     const { details } = result;
 
     // Check for missing expected fields (framework passes {} on error)

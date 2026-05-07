@@ -3,9 +3,9 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import { defineTool, VERSION } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { defineTool, VERSION } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 
 const VersionParams = Type.Object({});
@@ -47,7 +47,11 @@ const versionTool = defineTool({
     return renderVersionCall(args, theme);
   },
 
-  renderResult(result, _options, theme) {
+  renderResult(result, options, theme) {
+    if (options.isPartial) {
+      return new Text(theme.fg("dim", "Pi Version: loading..."), 0, 0);
+    }
+
     const { details } = result;
 
     if (!details?.version) {

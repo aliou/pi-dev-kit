@@ -5,9 +5,9 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import { defineTool, keyHint } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { defineTool, keyHint } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 import { findPiInstallation } from "./utils";
 

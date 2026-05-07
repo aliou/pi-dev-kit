@@ -5,9 +5,9 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   Theme,
-} from "@mariozechner/pi-coding-agent";
-import { defineTool, keyHint, VERSION } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { defineTool, keyHint, VERSION } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 import { findPiInstallation } from "./utils";
 
@@ -306,6 +306,10 @@ pi_changelog // Get latest changelog`,
   },
 
   renderResult(result, options, theme) {
+    if (options.isPartial) {
+      return new Text(theme.fg("dim", "Pi Changelog: loading..."), 0, 0);
+    }
+
     const { details } = result;
 
     // Check for missing expected fields to detect errors
@@ -417,6 +421,14 @@ const changelogVersionsTool = defineTool({
   },
 
   renderResult(result, options, theme) {
+    if (options.isPartial) {
+      return new Text(
+        theme.fg("dim", "Pi Changelog Versions: loading..."),
+        0,
+        0,
+      );
+    }
+
     const { details } = result;
 
     // Check for missing expected fields to detect errors

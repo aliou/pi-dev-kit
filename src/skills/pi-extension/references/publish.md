@@ -1,12 +1,10 @@
 # Publishing
 
-Extensions are published to npm and installed with `pi install`.
+Pi packages are published to npm or installed from git/local paths with `pi install`.
 
 ## Package Setup
 
-The `package.json` must have the `pi` key declaring extension resources. See `references/structure.md` for the full template.
-
-Key fields for publishing:
+A publishable package needs Pi metadata and discoverability fields.
 
 ```json
 {
@@ -15,20 +13,42 @@ Key fields for publishing:
   "type": "module",
   "license": "MIT",
   "private": false,
+  "keywords": ["pi-package", "pi-extension", "pi"],
   "publishConfig": { "access": "public" },
   "files": ["src", "README.md"],
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": ["./src/tools/index.ts", "./src/commands/index.ts"]
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": ">=0.51.0"
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "typebox": { "optional": true }
   }
 }
 ```
 
+Use the legacy `@mariozechner/*` namespace only while the target Pi packages are not published under `@earendil-works/*`.
+
+Pi core packages imported at runtime belong in optional `peerDependencies` with `"*"`. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
+
+## Installation Specs
+
+Users can install with:
+
+```bash
+pi install npm:@scope/pi-my-extension
+pi install git:github.com/org/pi-my-extension@v1.0.0
+pi install ./relative/path/to/package
+```
+
+By default, global installs write to `~/.pi/agent/settings.json`; `-l` writes project settings.
+
 ## Versioning with Changesets
 
-Use [changesets](https://github.com/changesets/changesets) for versioning and changelogs.
+Use Changesets for versioning and changelogs.
 
 ### `.changeset/config.json`
 
@@ -48,92 +68,86 @@ Use [changesets](https://github.com/changesets/changesets) for versioning and ch
 
 ### Creating a changeset
 
-The interactive CLI (`pnpm changeset`) is not available in headless environments. Write the file directly instead. Create `.changeset/<descriptive-name>.md`:
+In headless agent sessions, write the file directly instead of running the interactive CLI.
 
 ```md
 ---
 "@scope/pi-my-extension": patch
 ---
 
-Description of what changed and why it matters to users.
+Describe the user-visible change.
 ```
 
-Bump types: `patch` for fixes and internal changes, `minor` for new user-facing features, `major` for breaking changes.
+Use:
 
-Commit the changeset file alongside the changes it describes. Multiple changeset files can coexist — they are all consumed together on the next release.
+- `patch` for fixes and internal compatibility updates.
+- `minor` for new user-facing features.
+- `major` for breaking changes.
 
-### Releasing manually (no CI)
+Commit the changeset with the change it describes.
+
+### Manual release
 
 ```bash
-pnpm changeset version   # consumes .changeset/*.md, bumps version, updates CHANGELOG.md
-pnpm changeset publish   # publishes to npm
+pnpm changeset version
+pnpm changeset publish
 ```
 
 ## GitHub Actions Automation
 
-The recommended setup uses a single `publish.yml` workflow that runs on every push to `main`. It handles two cases automatically:
+Use the template publish workflow from `pi-extension-template`.
 
-- **Pending changesets present**: opens (or updates) a version PR titled `Updating @scope/pi-my-extension to version X.Y.Z`.
-- **Version PR merged**: publishes the package to npm and creates a GitHub release with a matching git tag.
+It handles:
 
-Copy `.github/workflows/publish.yml` from `pi-extension-template` into the new repo. It uses `changesets/action@v1` under the hood.
+- Pending changesets: opens or updates a version PR.
+- Version PR merged: publishes to npm and creates a GitHub release.
 
-The workflow requires two secrets, configured in the repo's GitHub settings under **Settings → Secrets and variables → Actions**:
+Required secrets:
 
-- `GITHUB_TOKEN` — automatically provided by GitHub Actions, no setup needed.
-- `NPM_TOKEN` — an npm automation token with publish access to the `@scope` org. Create one at npmjs.com under **Access Tokens → Generate New Token → Automation**. Add it as a repository secret named `NPM_TOKEN`. Without this, the publish step will fail silently on the version PR merge.
+- `GITHUB_TOKEN`: provided by GitHub Actions.
+- `NPM_TOKEN`: npm automation token with publish access.
 
-The workflow also sets `NPM_CONFIG_PROVENANCE=true`, which links the published package to the GitHub Actions run for supply chain transparency (requires the `id-token: write` permission, already included in the template).
+Keep `NPM_CONFIG_PROVENANCE=true` and `id-token: write` for provenance.
 
-## First-time Setup for a New Package
+## First Publish
 
-Before the workflow can publish a package that has never been on npm:
+Before first publish:
 
-1. Make sure `"private": false` and `"publishConfig": { "access": "public" }` are in `package.json`.
-2. Add the `NPM_TOKEN` secret to the repo (see above).
-3. The first time the version PR is merged, the workflow publishes the package. npm will create the package entry automatically — no manual `npm publish` needed.
+1. Set `"private": false`.
+2. Set `"publishConfig": { "access": "public" }` for scoped public packages.
+3. Add `NPM_TOKEN` to repo secrets.
+4. Merge the first Changesets version PR.
 
-If the package name is scoped (e.g., `@aliou/pi-my-extension`) and the scope is new to your npm account, you may need to create the scope first at npmjs.com or run `npm publish --access public` once manually to register it.
+npm creates the package entry on first publish. If the npm scope is new to your account, you may need to create the scope or publish once manually with `--access public`.
 
-## Installation
+## Monorepo Dependency Rules
 
-Users install extensions with:
+Public packages cannot depend on private workspace packages. Users installing from npm will not have those private packages.
 
-```bash
-pi install @scope/pi-my-extension
-```
+When adding a dependency:
 
-Pi reads the `pi` key from the package's `package.json` to discover extensions, skills, themes, and prompts.
+1. If it is a public workspace package, use `workspace:^` in the monorepo and make sure it is published.
+2. If it is private, do not depend on it from a public package.
+3. For external packages, use a normal npm range.
 
-## Dependency Management in Monorepos
-
-If publishing from a monorepo that contains both public and private packages:
-
-**Critical rule**: Public packages cannot depend on private workspace packages. This will break when users try to install your package from npm.
-
-In the pi-extensions monorepo, this is enforced by:
-- Pre-commit hook that blocks commits with invalid dependencies
-- CI check that prevents merging bad dependencies
-- `pnpm run check:public-deps` validates all dependencies
-
-When adding a workspace dependency to a `package.json`:
-1. Check if the dependency is public (`"private": false` or `"publishConfig": { "access": "public" }`).
-2. If the dependency is private, either make it public, make your package private, or remove the dependency.
+Run the repo's public-dependency check when available, for example `pnpm run check:public-deps`.
 
 ## Pre-publish Checklist
 
-- [ ] `"private": false` is set.
-- [ ] `"publishConfig": { "access": "public" }` is set.
-- [ ] `"files"` lists only what users need (`["src", "README.md"]`).
-- [ ] `peerDependencies` version range is correct (`>=` minimum supported version).
-- [ ] `@mariozechner/pi-tui` is in `peerDependencies` with `optional: true` in `peerDependenciesMeta` if imported at runtime.
-- [ ] `prepare` script is `[ -d .git ] && husky || true`, not bare `husky`.
-- [ ] `check:lockfile` script is present.
-- [ ] `description` is clear and concise.
-- [ ] `pi.extensions` paths are correct.
-- [ ] `NPM_TOKEN` secret is set on the GitHub repo.
-- [ ] `.github/workflows/publish.yml` is present.
-- [ ] If in a monorepo: no dependency on private workspace packages (`pnpm run check:public-deps` if available).
-- [ ] README documents what the extension does, required environment variables, and available tools/commands.
-- [ ] If wrapping a third-party API: extension handles missing API key gracefully (notification, not crash).
+- [ ] `private` is `false`.
+- [ ] `publishConfig.access` is `public` for scoped public packages.
+- [ ] `keywords` includes `pi-package`.
+- [ ] `files` lists only shipped files users need.
+- [ ] `pi.extensions`, `pi.skills`, `pi.prompts`, and `pi.themes` paths are correct.
+- [ ] Demo `pi.video` or `pi.image` metadata is present when available.
+- [ ] Imported Pi core packages are optional peers with `"*"`.
+- [ ] Imported Pi core packages are exact dev dependencies for type checking.
+- [ ] Third-party runtime packages are in `dependencies`.
+- [ ] No private workspace dependencies in public packages.
+- [ ] `prepare` is `[ -d .git ] && husky || true`, not bare `husky`.
+- [ ] `check:lockfile` exists.
+- [ ] README documents setup, tools, commands, providers, env vars, and limitations.
+- [ ] Missing API keys are handled with notifications or disabled features, not crashes.
 - [ ] `pnpm typecheck` and `pnpm lint` pass.
+- [ ] `.github/workflows/publish.yml` is present if using CI publish.
+- [ ] `NPM_TOKEN` is configured before relying on CI publish.

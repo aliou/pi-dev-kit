@@ -17,7 +17,8 @@
   },
   "pi": {
     "extensions": [
-      "./src/index.ts"
+      "./src/tools/index.ts",
+      "./src/commands/index.ts"
     ],
     "skills": [
       "./src/skills"
@@ -35,18 +36,18 @@
     "README.md"
   ],
   "dependencies": {
-    "@aliou/pi-utils-ui": "^0.1.0"
+    "@aliou/pi-utils-ui": "^0.4.0"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "0.70.0",
-    "@mariozechner/pi-tui": "0.70.0",
-    "typebox": ">=1.1.24"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
     "@changesets/cli": "^2.27.11",
-    "@mariozechner/pi-coding-agent": "0.70.0",
-    "@mariozechner/pi-tui": "0.70.0",
+    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-tui": "0.74.0",
     "typebox": "1.1.24",
     "@types/node": "^25.0.10",
     "husky": "^9.1.7",
@@ -54,8 +55,8 @@
   },
   "pnpm": {
     "overrides": {
-      "@mariozechner/pi-ai": "$@mariozechner/pi-coding-agent",
-      "@mariozechner/pi-tui": "$@mariozechner/pi-coding-agent"
+      "@earendil-works/pi-ai": "$@earendil-works/pi-coding-agent",
+      "@earendil-works/pi-tui": "$@earendil-works/pi-coding-agent"
     }
   },
   "scripts": {
@@ -69,10 +70,10 @@
   },
   "packageManager": "pnpm@10.26.1",
   "peerDependenciesMeta": {
-    "@mariozechner/pi-coding-agent": {
+    "@earendil-works/pi-coding-agent": {
       "optional": true
     },
-    "@mariozechner/pi-tui": {
+    "@earendil-works/pi-tui": {
       "optional": true
     },
     "typebox": {

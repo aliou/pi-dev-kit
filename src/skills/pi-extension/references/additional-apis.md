@@ -1,256 +1,64 @@
 # Additional APIs
 
-These APIs are available on `ExtensionAPI` and `ExtensionContext` but are less commonly used. Each is shown with a minimal example.
-
-When you implement something using one of these APIs, update this skill reference with a fuller example based on your actual usage.
+This reference covers less common `ExtensionAPI`, `ExtensionContext`, and `ExtensionCommandContext` APIs.
 
 ## Shortcuts
 
-Register global keyboard shortcuts:
+Register keyboard shortcuts for interactive mode.
 
 ```typescript
 pi.registerShortcut("ctrl+shift+p", {
   description: "Toggle plan mode",
   handler: async (ctx) => {
     planModeEnabled = !planModeEnabled;
-    ctx.ui.setStatus("plan", planModeEnabled ? "Plan Mode" : "");
+    ctx.ui.setStatus("plan-mode", planModeEnabled ? ctx.ui.theme.fg("accent", "Plan") : undefined);
   },
 });
 ```
 
-Shortcuts work only in Interactive mode.
+Shortcuts are TUI-only.
 
 ## Flags
 
-Register boolean flags that persist across sessions:
+Register CLI flags and read them in any handler.
 
 ```typescript
-// Register
-pi.registerFlag("auto-commit", {
-  description: "Auto-commit after each turn",
+pi.registerFlag("plan", {
+  description: "Start in plan mode",
+  type: "boolean",
   default: false,
 });
 
-// Read (in any handler)
-const autoCommit = pi.getFlag("auto-commit");
+const planEnabled = pi.getFlag("plan") === true;
 ```
 
-Users toggle flags with `/flag auto-commit` in the input editor.
+## Commands and Sessions
 
-## sendUserMessage
+Command handlers receive `ExtensionCommandContext`, which adds session-control methods. These methods are command-only because they can deadlock from event handlers.
 
-Inject a user message into the conversation programmatically:
-
-```typescript
-pi.sendUserMessage("Please summarize what we just discussed");
-```
-
-This triggers a full agent turn as if the user typed the message. Useful for file watchers, timers, or other automated triggers.
-
-## Session Name
-
-Set or get a name for the current session (shown in the session selector):
+### Wait for idle
 
 ```typescript
-pi.setSessionName("Feature: Auth Refactor");
-const name = pi.getSessionName();
-```
-
-## Labels
-
-Set a label on a specific session entry (shown in `/tree` view):
-
-```typescript
-pi.setLabel(entryId, "checkpoint: before refactor");
-```
-
-## exec
-
-Run a shell command and get the result. This is the **only** way to run external binaries or shell scripts from an extension.
-
-```typescript
-const result = await pi.exec("git status --porcelain", { cwd: process.cwd() });
-// result: { stdout, stderr, exitCode }
-```
-
-Useful for git operations, environment checks, running CLI tools, etc.
-
-**Do not use Node `child_process` APIs** (`exec`, `execSync`, `spawn`, `spawnSync`, `execFile`, `execFileSync`). `pi.exec` handles CWD resolution, output capture, and integrates with the extension lifecycle. Using `child_process` directly bypasses these guarantees and creates inconsistent behavior across environments.
-
-The only exception is a long-lived streaming process that requires direct stdin/stdout piping — document the reason in code comments if this applies.
-
-## Active Tools
-
-Get or set which tools are currently active:
-
-```typescript
-const tools = pi.getActiveTools(); // string[]
-pi.setActiveTools(["bash", "read", "write", "my_custom_tool"]);
-```
-
-Setting active tools restricts which tools the LLM can use.
-
-## Model Control
-
-```typescript
-// Set the active model
-const model = ctx.modelRegistry.find("anthropic", "claude-sonnet-4-5");
-if (model) {
-  const success = await pi.setModel(model);
-  if (!success) ctx.ui.notify("No API key for this model", "error");
-}
-
-// Get/set thinking level
-const level = pi.getThinkingLevel(); // "off" | "minimal" | "low" | "medium" | "high" | "xhigh"
-pi.setThinkingLevel("high");
-```
-
-## System Prompt
-
-Read or modify the system prompt (typically in `before_agent_start`):
-
-```typescript
-pi.on("before_agent_start", async (_event, ctx) => {
-  const prompt = ctx.getSystemPrompt();
-  ctx.setSystemPrompt(prompt + "\n\nExtra instructions.");
+pi.registerCommand("safe-command", {
+  handler: async (_args, ctx) => {
+    await ctx.waitForIdle();
+    // Safe to inspect or replace session state.
+  },
 });
 ```
 
-The system prompt resets each turn, so modifications are not cumulative. In `before_agent_start`, `ctx.getSystemPrompt()` reflects prompt changes from earlier handlers, and the event includes `systemPromptOptions` for structured prompt inputs.
+### New, fork, switch
 
-### Guidance Injection Pattern
-
-Extensions that add tools or behavioral patterns the agent may not know how to use correctly should inject guidance into the system prompt. Without it, agents fall back to bash workarounds even when a better tool is available.
-
-**When to inject guidance:**
-- Your extension adds a tool that competes with a natural bash fallback (e.g. a process manager, a CI watcher, a search tool)
-- Correct usage depends on subtle conditions (alert flags, when-not-to-use, alert vs. poll)
-- You have observed agents ignoring the tool or reaching for `bash` instead
-
-**When not to:**
-- The tool description alone is self-explanatory
-- The tool has no plausible bash alternative
-
----
-
-There are two ways to inject guidance, depending on complexity:
-
-#### Tier 1: Per-Tool Metadata (Preferred for Simple Tools)
-
-For most tools, use the SDK-level `promptSnippet` and `promptGuidelines` fields directly on the tool definition. No hook is needed.
-
-- **`promptSnippet`** — Injected into the "Available tools" system prompt section. Use for a concise (1–2 sentence) description of when to prefer this tool.
-- **`promptGuidelines`** — Appended verbatim to the global "Guidelines" section. Use for a short list of usage rules that still make sense without extra tool-local context.
-
-```typescript
-const myTool = {
-  name: "my_tool",
-  label: "My Tool",
-  description: "...",
-  promptSnippet: "Manage background processes without blocking the conversation.",
-  promptGuidelines: [
-    "Use my_tool for long-running commands instead of bash.",
-    "After starting my_tool, continue other work instead of waiting.",
-  ],
-  parameters: ...,
-  execute: ...,
-};
-```
-
-This is the simplest approach and works well when guidance is specific to a single tool.
-
-Because these bullets are merged into the shared global `Guidelines` section, avoid vague phrasing like `Use this tool...`. Name the exact tool (`my_tool`, `process`, `linkup_web_search`) so the bullet remains clear after injection.
-
-#### Tier 2: System Prompt Hook (For Complex Cross-Tool Orchestration)
-
-Use the `before_agent_start` hook when:
-- Guidance involves **cross-tool workflow instructions** (e.g. "use tool A, then tool B, then tool C")
-- You need **dynamic context from config** (e.g. workspace names, team keys, feature flags)
-- The per-tool metadata fields aren't expressive enough
-
-**Structure: three files**
-
-`src/guidance.ts` — the guidance text as a named export:
-
-```typescript
-export const MY_EXTENSION_GUIDANCE = `
-## My Extension
-
-Use the \`my_tool\` tool for X. Don't use bash for X.
-
-**Use \`my_tool\` when:**
-- Situation A
-- Situation B
-
-**Use \`bash\` when:**
-- You need the result immediately to proceed (quick commands that finish in seconds)
-
-**Never do this:**
-\`\`\`bash
-workaround_command  # loses observability
-\`\`\`
-
-**Do this instead:**
-\`\`\`
-my_tool({ action: "start", ... })
-\`\`\`
-`;
-```
-
-`src/hooks/system-prompt.ts` — the hook:
-
-```typescript
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { configLoader } from "../config";
-import { MY_EXTENSION_GUIDANCE } from "../guidance";
-
-export function registerGuidance(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", async (event) => {
-    const config = configLoader.getConfig();
-    if (!config.systemPromptGuidance) return;
-
-    return {
-      systemPrompt: `${event.systemPrompt}\n${MY_EXTENSION_GUIDANCE}`,
-    };
-  });
-}
-```
-
-`src/config.ts` — add the toggle (default `true`):
-
-```typescript
-export interface MyExtensionConfig {
-  // ...
-  /** Inject tool guidance into the system prompt each turn. Default: true. */
-  systemPromptGuidance?: boolean;
-}
-```
-
-Call `registerGuidance(pi)` from your hooks setup function.
-
----
-
-**What makes guidance effective:**
-
-- Lead with the decision rule: **when to use AND when not to use**. The when-not-to-use is as important — it gives the agent permission to keep using `bash` for quick tasks and prevents overcorrection.
-- Name anti-patterns explicitly by their exact form (`cmd &`, `nohup`, `sleep 30 &&`). Abstract descriptions ("don't use bash workarounds") are ignored.
-- Use 2–3 tight code examples. More than that dilutes attention; fewer leave the pattern underspecified.
-- Keep the guidance section header (`## My Extension`) so it reads as a named capability, not a restriction.
-- Avoid stacking emphasis markers (`NEVER`, `ALWAYS`, `IMPORTANT`). One or two land; more are ignored.
-
-**Reference implementations:**
-- `pi-linkup` — Uses per-tool `promptSnippet`/`promptGuidelines` (simple tools, no hook needed).
-- `pi-linear` — Uses `guidance.ts` + `before_agent_start` hook (cross-tool workflow instructions + dynamic workspace context).
-- `pi-processes` — Uses both: `promptSnippet`/`promptGuidelines` on tools for basic guidance, plus system prompt hook for complex multi-tool orchestration patterns.
-
-## Session Replacement
-
-`ctx.newSession()`, `ctx.fork()`, and `ctx.switchSession()` invalidate captured pre-replacement session-bound objects after the replacement. Use `withSession` for post-switch work and only use the fresh callback context there.
+Use `withSession` for post-replacement work. Captured old `pi`, old command `ctx`, and old `ctx.sessionManager` are stale after replacement.
 
 ```typescript
 await ctx.newSession({
   setup: async (sm) => {
-    sm.appendCustomMessageEntry("my-source", "Seed context", true);
+    sm.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: "Seed context" }],
+      timestamp: Date.now(),
+    });
   },
   withSession: async (ctx) => {
     await ctx.sendUserMessage("Continue from the new session");
@@ -258,88 +66,324 @@ await ctx.newSession({
 });
 ```
 
-Do not reuse captured `pi`, command `ctx`, or `ctx.sessionManager` after a session replacement.
-
-## Compaction
-
-Trigger compaction programmatically:
-
 ```typescript
-await pi.compact();
-```
+await ctx.fork(entryId, {
+  position: "at",
+  withSession: async (ctx) => ctx.ui.notify("Forked", "info"),
+});
 
-## Shutdown
-
-Shut down pi gracefully:
-
-```typescript
-pi.shutdown();
-```
-
-## EventBus
-
-Inter-extension communication via a shared event bus:
-
-```typescript
-// Extension A: emit
-pi.events.emit("my-extension:data-ready", { items: [...] });
-
-// Extension B: listen
-pi.events.on("my-extension:data-ready", (data) => {
-  console.log("Received:", data.items.length, "items");
+await ctx.switchSession(sessionPath, {
+  withSession: async (ctx) => {
+    await ctx.sendUserMessage("Resume this work here");
+  },
 });
 ```
 
-Namespace event names with your extension name to avoid collisions. The event bus is supplementary -- most extensions do not need it. Use it when two extensions need to coordinate.
-
-## Theme Control
+### Tree navigation
 
 ```typescript
-// Get current and available themes
-const current = ctx.ui.getTheme();
-const all = ctx.ui.getAllThemes();
-
-// Set theme
-const result = ctx.ui.setTheme("catppuccin-mocha");
-// result: { success: boolean, error?: string }
+await ctx.navigateTree(targetId, {
+  summarize: true,
+  customInstructions: "Focus on implementation decisions",
+  replaceInstructions: false,
+  label: "review-checkpoint",
+});
 ```
+
+## Reload
+
+Use `ctx.reload()` in command handlers. Treat it as terminal for predictable behavior.
+
+```typescript
+pi.registerCommand("reload-runtime", {
+  description: "Reload extensions, skills, prompts, and themes",
+  handler: async (_args, ctx) => {
+    await ctx.reload();
+    return;
+  },
+});
+```
+
+Code after `await ctx.reload()` still runs in the old call frame. Avoid post-reload work in that handler.
+
+Tools cannot call `ctx.reload()`. If the LLM needs a reload tool, create a tool that queues a reload command as a follow-up user message.
+
+```typescript
+async execute() {
+  pi.sendUserMessage("/reload-runtime", { deliverAs: "followUp" });
+  return { content: [{ type: "text", text: "Queued /reload-runtime." }] };
+}
+```
+
+## Sending Messages
+
+### `pi.sendUserMessage(content, options?)`
+
+Sends an actual user message and triggers a turn.
+
+```typescript
+pi.sendUserMessage("Summarize the current state.");
+pi.sendUserMessage("Focus on tests next.", { deliverAs: "steer" });
+pi.sendUserMessage("After that, summarize.", { deliverAs: "followUp" });
+```
+
+When the agent is streaming, specify `deliverAs: "steer"` or `"followUp"`.
+
+### `pi.sendMessage(message, options?)`
+
+Sends a custom message. Use `registerMessageRenderer` for custom display.
+
+```typescript
+pi.sendMessage(
+  {
+    customType: "my-extension-status",
+    content: "Status update",
+    display: true,
+    details: { status: "ok" },
+  },
+  { deliverAs: "nextTurn" },
+);
+```
+
+Delivery modes:
+
+- `steer`: queue while streaming and deliver before next LLM call.
+- `followUp`: wait until the agent finishes.
+- `nextTurn`: save for the next user prompt.
+
+## State and Session Metadata
+
+```typescript
+pi.appendEntry("my-extension-state", { enabled: true });
+pi.setSessionName("Feature: auth refactor");
+const name = pi.getSessionName();
+pi.setLabel(entryId, "checkpoint-before-refactor");
+pi.setLabel(entryId, undefined); // clear
+```
+
+Use labels for `/tree` bookmarks and session names for the session selector.
+
+## Shell Execution
+
+Use `pi.exec(command, args, options?)` for shell commands.
+
+```typescript
+const result = await pi.exec("git", ["status", "--porcelain"], {
+  cwd: ctx.cwd,
+  signal,
+  timeout: 5_000,
+});
+
+// result.stdout, result.stderr, result.code, result.killed
+```
+
+Do not use Node `child_process` APIs for normal command execution. The only exception is a documented long-lived streaming process with direct stdin/stdout needs that `pi.exec()` cannot support.
+
+## Active Tools
+
+```typescript
+const active = pi.getActiveTools();
+const all = pi.getAllTools();
+const builtin = all.filter((tool) => tool.sourceInfo.source === "builtin");
+
+pi.setActiveTools(["read", "grep", "find"]);
+```
+
+`pi.getAllTools()` includes built-in tools, SDK tools, and extension tools with `sourceInfo` provenance.
+
+## Model and Thinking Control
+
+```typescript
+const model = ctx.modelRegistry.find("anthropic", "claude-sonnet-4-5");
+if (model) {
+  const success = await pi.setModel(model);
+  if (!success) ctx.ui.notify("No API key for this model", "error");
+}
+
+const level = pi.getThinkingLevel();
+pi.setThinkingLevel("high");
+```
+
+Thinking levels are `"off"`, `"minimal"`, `"low"`, `"medium"`, `"high"`, and `"xhigh"`. Pi clamps unsupported levels to model capabilities.
+
+## System Prompt Guidance
+
+Prefer tool-level `promptSnippet` and `promptGuidelines` for simple guidance. Use `before_agent_start` only for dynamic or cross-tool guidance.
+
+### Per-tool metadata
+
+```typescript
+const myTool = defineTool({
+  name: "my_tool",
+  label: "My Tool",
+  description: "...",
+  promptSnippet: "Manage background work without blocking the conversation.",
+  promptGuidelines: [
+    "Use my_tool for long-running commands instead of shell backgrounding.",
+    "After starting my_tool, continue useful work instead of polling my_tool immediately.",
+  ],
+  parameters,
+  async execute() {
+    // ...
+  },
+});
+```
+
+Every `promptGuidelines` bullet must name the exact tool because Pi injects bullets flat into the global Guidelines section.
+
+### System prompt hook
+
+```typescript
+export const MY_EXTENSION_GUIDANCE = `
+## My Extension
+
+Use \`my_tool\` when ...
+Do not use bash workaround ...
+`;
+
+pi.on("before_agent_start", async (event) => {
+  if (!configLoader.getConfig().systemPromptGuidance) return;
+  return {
+    systemPrompt: `${event.systemPrompt}\n\n${MY_EXTENSION_GUIDANCE}`,
+  };
+});
+```
+
+Use `event.systemPromptOptions` when you need structured prompt inputs such as selected tools, loaded skills, context files, and accumulated prompt guidelines.
+
+## Compaction and Shutdown
+
+Use `ctx.compact()` to trigger compaction without awaiting the full operation.
+
+```typescript
+ctx.compact({
+  customInstructions: "Focus on recent code changes",
+  onComplete: (result) => ctx.ui.notify("Compaction complete", "info"),
+  onError: (error) => ctx.ui.notify(`Compaction failed: ${error.message}`, "error"),
+});
+```
+
+Use `ctx.shutdown()` to request graceful shutdown.
+
+```typescript
+ctx.shutdown();
+```
+
+In interactive and RPC modes, shutdown is deferred until Pi becomes idle. In print mode it is a no-op.
+
+## Event Bus
+
+Use the shared event bus only when extensions need to coordinate.
+
+```typescript
+pi.events.emit("my-extension:data-ready", { items });
+pi.events.on("my-extension:data-ready", (data) => {
+  console.log(data.items.length);
+});
+```
+
+Namespace event names with your extension name.
 
 ## UI Customization
 
+### Working indicator and message
+
 ```typescript
-// Replace the footer
-ctx.ui.setFooter((maxWidth, theme) => {
-  return theme.fg("muted", "Custom footer content");
-});
+ctx.ui.setWorkingMessage("Thinking through plan...");
+ctx.ui.setWorkingMessage(); // restore default
 
-// Replace the startup header
-ctx.ui.setHeader((maxWidth, theme) => {
-  return theme.fg("accent", "My Custom Header");
-});
+ctx.ui.setWorkingVisible(false);
+ctx.ui.setWorkingVisible(true);
 
-// Set the editor component
-ctx.ui.setEditorComponent((tui, theme, kb) => {
-  return new CustomEditor(tui, theme, kb);
-});
-
-// Prefill the editor
-ctx.ui.setEditorText("Prefilled content");
-
-// Customize the streaming working indicator
-ctx.ui.setWorkingIndicator({ frames: [ctx.ui.theme.fg("accent", "●")] }); // static
-ctx.ui.setWorkingIndicator({ frames: [] }); // hidden
+ctx.ui.setWorkingIndicator({ frames: [ctx.ui.theme.fg("accent", "●")] });
+ctx.ui.setWorkingIndicator({ frames: [] }); // hide indicator
 ctx.ui.setWorkingIndicator(); // restore default
+```
 
-// Stack autocomplete on top of built-in slash/path completion
+### Widgets, title, editor text
+
+```typescript
+ctx.ui.setWidget("my-widget", ["Line 1", "Line 2"]);
+ctx.ui.setWidget("my-widget", ["Below"], { placement: "belowEditor" });
+ctx.ui.setWidget("my-widget", undefined);
+
+ctx.ui.setTitle("pi - my project");
+ctx.ui.setEditorText("Prefilled prompt");
+const editorText = ctx.ui.getEditorText();
+ctx.ui.pasteToEditor("Pasted content");
+```
+
+### Footer
+
+```typescript
+ctx.ui.setFooter((tui, theme, footerData) => ({
+  invalidate() {},
+  render(width) {
+    return [theme.fg("dim", footerData.getGitBranch() ?? "no git")];
+  },
+  dispose: footerData.onBranchChange(() => tui.requestRender()),
+}));
+
+ctx.ui.setFooter(undefined);
+```
+
+### Autocomplete providers
+
+Stack on top of the current provider and delegate when your syntax does not match.
+
+```typescript
 ctx.ui.addAutocompleteProvider((current) => ({
-  async getSuggestions(lines, cursorLine, cursorCol) {
+  async getSuggestions(lines, cursorLine, cursorCol, options) {
     const beforeCursor = (lines[cursorLine] ?? "").slice(0, cursorCol);
     const match = beforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/);
-    if (!match) return current.getSuggestions(lines, cursorLine, cursorCol);
-    return [{ label: `#${match[1]}123`, value: `#${match[1]}123` }];
+    if (!match) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+
+    return {
+      prefix: `#${match[1] ?? ""}`,
+      items: [{ value: "#123", label: "#123", description: "Issue title" }],
+    };
   },
-  shouldTriggerFileCompletion(input) {
-    return current.shouldTriggerFileCompletion?.(input) ?? false;
+  applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+    return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+  },
+  shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
+    return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
   },
 }));
 ```
+
+### Theme control
+
+```typescript
+const themes = ctx.ui.getAllThemes();
+const light = ctx.ui.getTheme("light");
+const result = ctx.ui.setTheme("light");
+if (!result.success) ctx.ui.notify(result.error, "error");
+```
+
+## Pi Paths
+
+Use SDK helpers for Pi paths instead of `homedir()` when helpers exist. They respect `PI_CODING_AGENT_DIR` and test/custom setups.
+
+Common helpers exported from the main package include:
+
+- `getAgentDir()`
+- `getSettingsPath()`
+- `getSessionsDir()`
+- `getPromptsDir()`
+- `getToolsDir()`
+- `getCustomThemesDir()`
+- `getModelsPath()`
+- `getAuthPath()`
+- `getBinDir()`
+- `getDebugLogPath()`
+
+## Checklist
+
+- [ ] Session replacement code uses `withSession` for post-switch work.
+- [ ] Reload handlers return immediately after `await ctx.reload()`.
+- [ ] `pi.exec()` is used instead of `child_process`.
+- [ ] System prompt changes return `{ systemPrompt }` from `before_agent_start`.
+- [ ] `promptGuidelines` bullets name exact tools.
+- [ ] UI customizations account for RPC/print degradation.
+- [ ] Pi path helpers are used instead of `homedir()`.

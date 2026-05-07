@@ -1,102 +1,150 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { VERSION } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { VERSION } from "@earendil-works/pi-coding-agent";
 
-const NPM_REGISTRY_URL =
-  "https://registry.npmjs.org/@mariozechner/pi-coding-agent/latest";
+const NPM_REGISTRY_URLS = [
+  "https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest",
+  "https://registry.npmjs.org/@mariozechner/pi-coding-agent/latest",
+] as const;
 
 async function fetchLatestVersion(): Promise<string | null> {
-  try {
-    const res = await fetch(NPM_REGISTRY_URL);
-    if (!res.ok) return null;
-    const data = (await res.json()) as { version?: string };
-    return data.version ?? null;
-  } catch {
-    return null;
+  for (const url of NPM_REGISTRY_URLS) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const data = (await res.json()) as { version?: string };
+      if (data.version) return data.version;
+    } catch {
+      // Try the next registry URL.
+    }
   }
+  return null;
 }
 
 const UPDATE_PROMPT = `# Update Pi Extensions
 
-Update this project's Pi extensions, themes, and components to the specified target Pi version.
+Update this project's Pi extensions, themes, skills, prompt templates, and package metadata to the specified target Pi version.
 
-## Steps
+## Operating Rules
 
-### 1. Detect Package Manager
+- Keep the update focused on Pi compatibility and current extension best practices.
+- Read the relevant Pi docs before changing code. Follow linked docs when a page points to them.
+- Present a concrete plan and wait for user confirmation before editing files.
+- If a migration is ambiguous or changes public behavior, ask the user instead of guessing.
+- Preserve existing extension behavior unless the target Pi version requires a change.
 
-Use \`detect_package_manager\` to identify the package manager (npm, pnpm, yarn, bun). Use its install and run commands for all subsequent steps.
+## 1. Detect Package Manager
 
-### 2. Version Check
+Use \`detect_package_manager\` to identify npm, pnpm, yarn, or bun. Use the detected install and run commands for every later step.
 
-The target Pi version is provided above. Read \`./package.json\` to find the current Pi package versions. The relevant packages are any of:
-- \`@mariozechner/pi-ai\`
-- \`@mariozechner/pi-coding-agent\`
-- \`@mariozechner/pi-tui\`
-- \`@mariozechner/pi-agent-core\`
+## 2. Inspect Package State
 
-Report the current version in package.json vs the target version. If versions match, stop here -- nothing to update.
+Read \`./package.json\` and any sub-package \`package.json\` files. Find Pi core packages in all dependency sections, peer dependency metadata, pnpm overrides, imports, docs, and examples.
 
-### 3. Gather Documentation
+Current Pi core packages are:
+- \`@earendil-works/pi-coding-agent\`
+- \`@earendil-works/pi-agent-core\`
+- \`@earendil-works/pi-ai\`
+- \`@earendil-works/pi-tui\`
+- \`typebox\`
 
-If there's a version mismatch:
-1. Use \`pi_changelog\` to get changelog entries for versions between current and target
-2. Use \`pi_docs\` to get paths to Pi documentation
-3. Read the relevant docs, especially:
-   - \`docs/extensions.md\` for extension API changes
-   - Any migration guides or breaking changes noted in changelogs
+Legacy packages under \`@mariozechner/*\` may still be present. Treat them as Pi core packages. Prefer \`@earendil-works/*\` when the target version exists on npm; if the new namespace is not published for the target version yet, keep the legacy namespace and report that decision.
 
-### 4. Analyze Source
+For distributed Pi packages:
+- Put imported Pi core packages in \`peerDependencies\` with \`"*"\` and mark each one \`optional: true\` in \`peerDependenciesMeta\`.
+- Keep the same Pi core packages in \`devDependencies\` at the exact target version for local type checking.
+- Keep \`typebox\` 1.x. Do not use \`@sinclair/typebox\` in new code.
 
-Scan all source files that import from Pi packages:
-1. Find all \`.ts\` and \`.tsx\` files that import from \`@mariozechner/pi-*\`
-2. For each file, identify API usage that needs updating based on changelog/docs
-3. Check overridden tools or tool wrappers for delegated \`tool.execute(...)\` calls; update forwarded parameter order and optional args
-4. Note deprecated patterns or new recommended approaches
-5. Look for custom utility functions that duplicate functionality now available in the Pi SDK -- if the SDK provides an equivalent, flag it for replacement
+Report current versions/namespaces vs target before planning code changes. If everything already matches and no code/docs best-practice updates are needed, stop.
 
-### 5. Create Update Plan
+## 3. Gather Pi Documentation
 
-Present a detailed plan:
-- Package version updates needed (in root and any sub-package.json files with peerDependencies)
-- For each affected file:
-  - Specific API migrations required
-  - Breaking changes and how to address them
-- New features from the changelog that could improve existing code
-- Custom utilities replaceable by SDK exports
+If an update is needed:
+1. Use \`pi_changelog_versions\` and \`pi_changelog\` for every version between the current and target versions.
+2. Use \`pi_docs\` to locate installed Pi docs.
+3. Read relevant docs completely before editing, especially:
+   - \`docs/extensions.md\`
+   - \`docs/tui.md\` for components and renderers
+   - \`docs/packages.md\` for package metadata and peer dependency rules
+   - \`docs/custom-provider.md\` and \`docs/models.md\` for providers
+   - \`docs/rpc.md\` when UI or mode behavior is touched
+   - \`docs/skills.md\` when package skills are touched
+4. Read examples that match the changed area, not just the docs.
 
-### 6. User Confirmation
+## 4. Analyze Source and Docs
 
-Present the plan and ask for confirmation before proceeding. Wait for feedback. Iterate on the plan based on user input until agreement is reached.
+Scan all source, tests, README, skills, prompts, and examples for Pi usage.
 
-### 7. Execute Updates
+For tools, verify:
+- Standalone tool objects use \`defineTool({...})\` from Pi so \`execute\`, \`renderCall\`, and \`renderResult\` infer params from \`parameters\`. Do not pass explicit generic arguments to \`defineTool\` and avoid callback parameter annotations unless TypeScript needs help.
+- Define \`type MyToolParams = Static<typeof parameters>\` for helper/action APIs, but prefer inference inside \`defineTool\` callbacks.
+- Every tool has \`label\`. Add \`promptSnippet\` when the tool should appear in Available tools.
+- Every \`promptGuidelines\` bullet names the exact tool, because Pi injects bullets flat into the global Guidelines section. Do not write "this tool".
+- Execute signature is \`(toolCallId, params, signal, onUpdate, ctx)\`; signal comes before \`onUpdate\`.
+- Use \`onUpdate?.(...)\` and forward \`signal\` to \`fetch\`, \`pi.exec\`, SDK clients, and long work.
+- Use \`StringEnum\` from \`@earendil-works/pi-ai\`/legacy \`@mariozechner/pi-ai\` for string enums; avoid \`Type.Union([Type.Literal(...)])\` for model-facing enums.
+- Use \`prepareArguments(args)\` only for backward-compatible schema shims before validation.
+- Use \`executionMode: "sequential"\` for tools whose sibling calls mutate shared in-memory state or otherwise must not run concurrently.
+- File-mutating tools normalize leading \`@\` in paths and wrap the full read-modify-write window in \`withFileMutationQueue()\`.
+- Tools returning large output use \`truncateHead\` or \`truncateTail\`, tell the LLM what was truncated, and write full output to a temp file.
+- Do not use Node \`child_process\` for normal commands; use \`pi.exec(command, args, { signal, cwd, timeout })\`.
 
-Once confirmed:
-1. Update Pi package versions in \`./package.json\` and any sub-package files (peerDependencies) to the exact target version. Use exact versions (e.g., \`0.51.0\`), not ranges.
-2. Apply the planned code changes
-3. Run the install command from step 1
-4. Run typecheck (\`tsc --build\` or the project's typecheck script)
-5. Run lint if the project has a lint script
-6. Report results and any issues encountered
+For rendering and TUI, verify:
+- \`renderCall\` and \`renderResult\` return Pi TUI \`Component\` objects, not raw strings.
+- \`renderResult\` handles \`options.isPartial\` first with a stable tool-scoped message.
+- Tool errors are detected via missing expected fields in \`details\` or the 4th render context \`context.isError\`.
+- Use \`ToolCallHeader\`, \`ToolBody\`, and \`ToolFooter\` consistently. Omit empty footers.
+- Use \`keyHint("app.tools.expand", "to expand")\` for expand hints.
+- Use \`Container\`, \`Text\`, \`Markdown\`, \`SelectList\`, \`SettingsList\`, \`BorderedLoader\`, and \`DynamicBorder\` before writing custom UI.
+- Custom components implement \`render(width): string[]\`, \`handleInput(data)\`, and \`invalidate()\`; use \`matchesKey\` and keep rendered lines within width.
+- \`ctx.ui.custom()\` has RPC/print fallback and interactive close paths use explicit sentinels such as \`null\` or \`"closed"\`, not \`done(undefined)\`.
 
-### 8. Commit Changes
+For extension APIs, verify:
+- Hook return shapes match current Pi docs: \`input\` returns \`{ action: "continue" | "transform" | "handled", ... }\`; \`before_agent_start\` returns \`{ systemPrompt }\`; \`tool_result\` returns result patches.
+- Session replacement uses \`withSession\` after \`ctx.newSession()\`, \`ctx.fork()\`, or \`ctx.switchSession()\`; do not reuse captured old \`pi\`, command \`ctx\`, or \`ctx.sessionManager\`.
+- Reload command handlers treat \`await ctx.reload(); return;\` as terminal.
+- Fire-and-forget UI methods do not need \`ctx.hasUI\`; dialog methods that gate behavior do.
+- Providers use current \`pi.registerProvider(name, config)\`, \`name\`, \`authHeader\`, OAuth, per-model \`baseUrl\`, and \`thinkingLevelMap\` when relevant. Dynamic model discovery belongs in an async extension factory, not \`session_start\`.
+- Use SDK helpers for Pi paths instead of \`homedir()\` when helpers exist.
 
-After successful verification:
-1. Check \`git status\` to see all changed files
-2. Stage only files changed by this update -- do not use \`git add .\`
-3. Commit with message format: \`chore: update pi packages to X.Y.Z\`
-4. Include a brief summary of breaking changes addressed in the commit body
+For project structure and package docs, verify:
+- Prefer one extension entry point per feature directory: \`src/tools/index.ts\`, \`src/commands/index.ts\`, \`src/hooks/index.ts\`, \`src/providers/index.ts\`.
+- Avoid a root \`src/index.ts\` fan-out registrar for new code.
+- Keep domain logic in Pi-free core modules and tools as thin wrappers.
+- Config uses TypeScript raw/resolved interfaces with \`ConfigLoader<Raw, Resolved>\`, not TypeBox schemas.
+- No \`.js\` suffixes in TypeScript imports.
 
-## Fallback
+## 5. Create Update Plan
 
-If the extension tools (\`pi_changelog\`, \`pi_docs\`, \`detect_package_manager\`) fail -- which can happen when the very update being applied changes the tool calling convention -- fall back to:
-- Changelog: read \`CHANGELOG.md\` from the Pi installation directory
-- Docs: read \`README.md\` and list \`docs/\` from the Pi installation directory
-- Package manager: check for lockfiles manually (\`pnpm-lock.yaml\`, \`yarn.lock\`, \`package-lock.json\`, \`bun.lockb\`)
+Present a detailed plan with:
+- Package namespace/version changes and whether \`@earendil-works/*\` is available for the target.
+- Files to change and why.
+- API migrations required by changelogs/docs.
+- Best-practice cleanups found in source, README, skills, prompts, and examples.
+- Verification commands to run.
 
-## Important
+Ask for confirmation before editing.
 
-- Preserve existing functionality while updating to new APIs
-- Keep changes minimal and focused on API compatibility
-- If unsure about a migration, ask for clarification`;
+## 6. Execute After Confirmation
+
+After the user confirms:
+1. Apply package metadata changes.
+2. Apply source/docs/skill/prompt changes.
+3. Run the detected install command.
+4. Run typecheck.
+5. Run lint if available.
+6. Report changed files, verification results, and any remaining risks.
+
+## 7. Commit Changes When Asked
+
+Only commit if the user asks. If committing:
+1. Run \`git status\`.
+2. Stage only files changed for this update; never use \`git add .\`.
+3. Follow the repository's commit style, defaulting to \`chore: update pi packages to X.Y.Z\`.
+4. Include a short body listing breaking changes handled.
+
+## Fallbacks
+
+If \`pi_changelog\`, \`pi_docs\`, or \`detect_package_manager\` fail, manually inspect the installed Pi package directory, its \`CHANGELOG.md\`, \`README.md\`, \`docs/\`, \`examples/\`, lockfiles, and \`package.json\`.`;
 
 export function registerUpdateCommand(pi: ExtensionAPI) {
   pi.registerCommand("extensions:update", {

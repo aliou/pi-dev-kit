@@ -44,7 +44,7 @@ Test event hooks by triggering the relevant actions:
 
 ## Unit Testing Core Logic
 
-The core/lib pattern makes domain logic testable without the Pi framework. Extract business logic into modules that don't import from `@mariozechner/pi-coding-agent` and test them directly.
+The core/lib pattern makes domain logic testable without the Pi framework. Extract business logic into modules that don't import from Pi core packages (`@earendil-works/pi-coding-agent` or legacy `@mariozechner/pi-coding-agent`) and test them directly.
 
 ### Testable core modules
 

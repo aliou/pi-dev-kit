@@ -1,130 +1,95 @@
 # Messages
 
-Pi provides several ways to display information to the user. Choose based on the UX goal.
+Pi provides several ways to show information. Choose based on persistence and interactivity.
 
 ## When to Use What
 
-| Method | Persistence | Interactivity | Use When |
-|---|---|---|---|
-| `ctx.ui.notify()` | Transient (fades) | None | Quick feedback: "Saved", "API key missing" |
-| `ctx.ui.custom()` | Until dismissed | Full keyboard | Rich interactive display: pickers, dashboards |
-| `pi.sendMessage()` | In session history | Via renderer | Persistent results that should survive compaction |
-| `pi.appendEntry()` | In session history | Via renderer | State tracking entries (see `references/state.md`) |
+| API | Persists | LLM context | Use when |
+|---|---:|---:|---|
+| `ctx.ui.notify()` | No | No | Quick feedback. |
+| `ctx.ui.custom()` | No | No | Rich interactive display. |
+| `pi.sendMessage()` | Yes | Yes when delivered into context | Persistent custom/user-visible messages. |
+| `pi.appendEntry()` | Yes | No | Extension state/history that should not enter model context. |
+| Tool result `details` | Yes | Details no; content yes | Branch-aware state tied to a tool call. |
 
-## sendMessage
+For tool state, prefer tool result `details`. For command results that should be visible later, use `sendMessage` plus a renderer.
 
-Sends a message into the session conversation. It appears as an assistant message and is persisted in session history.
+## `pi.sendMessage()`
+
+Sends a custom message into the session.
 
 ```typescript
 pi.sendMessage({
-  customType: "balance-result",     // Identifier for the message renderer
-  content: "Balance: $42.50",       // Plain text content (LLM sees this)
-  display: true,                    // Show in TUI
-  details: { balance: 42.50 },     // Rich data for custom rendering
+  customType: "balance-result",
+  content: "Balance: $42.50",
+  display: true,
+  details: { balance: 42.5 },
 });
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `customType` | `string` | Identifies the message type. Paired with `registerMessageRenderer`. |
-| `content` | `string` | Plain text content. This is what the LLM sees if the message is in context. |
-| `display` | `boolean` | Whether to show the message in the TUI. |
-| `details` | `object` | Arbitrary data passed to the message renderer. |
-
-## registerMessageRenderer
-
-Registers a custom renderer for messages with a specific `customType`:
+Options:
 
 ```typescript
-import type {
-  ExtensionAPI,
-  MessageRenderOptions,
-  Theme,
-} from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+pi.sendMessage(message, { deliverAs: "steer", triggerTurn: true });
+```
+
+Delivery modes:
+
+- `steer`: queue while streaming and deliver before the next LLM call.
+- `followUp`: wait until the agent finishes.
+- `nextTurn`: store for the next user prompt.
+
+## `registerMessageRenderer`
+
+Register a renderer for `customType`. Renderers return TUI `Component | undefined`.
+
+```typescript
+import type { ExtensionAPI, MessageRenderOptions, Theme } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 
 interface BalanceDetails {
   balance?: number;
 }
 
-export default function (pi: ExtensionAPI) {
-  pi.registerMessageRenderer<BalanceDetails>(
-    "balance-result",
-    (message, _options: MessageRenderOptions, theme: Theme) => {
-      const balance = message.details?.balance;
-      const text =
-        typeof balance === "number"
-          ? `Account Balance: $${balance.toFixed(2)}`
-          : message.content;
+export default function messagesExtension(pi: ExtensionAPI) {
+  pi.registerMessageRenderer<BalanceDetails>("balance-result", (message, options, theme) => {
+    const balance = message.details?.balance;
+    const text =
+      typeof balance === "number"
+        ? `Account Balance: $${balance.toFixed(2)}`
+        : message.content;
 
-      return new Text(theme.fg("success", text), 0, 0);
-    },
-  );
+    return new Text(theme.fg("success", text), 0, 0);
+  });
 }
 ```
 
-The renderer receives the full message object, render options, and theme. It returns a TUI `Component` such as `Text`, `Box`, `Markdown`, or a custom component. If no renderer is registered for a `customType`, the message's `content` field is displayed as plain text.
+Renderer rules:
 
-For larger renderers, keep the renderer implementation next to the hook or command that emits that `customType`. See `pi-processes/src/hooks/message-renderer.ts` for a compact lifecycle-message renderer and `pi-harness/extensions/breadcrumbs/lib/session-link.ts` for richer persistent session-link renderers.
+- Collapsed view should be one scannable line.
+- Use `options.expanded` for details.
+- If `details` is missing or malformed, fall back to `message.content`.
+- Do not throw from renderers.
+- Keep `details` small and durable; put large human-readable text in `content`.
 
-## Custom Message Design Guide (breadcrumbs-style)
+## Command with Persistent Fallback
 
-`breadcrumbs` is a good reference for custom entries/messages (`../pi-extensions/extensions/breadcrumbs/lib/session-link.ts`, plus `commands/handoff.ts` and `commands/spawn.ts`).
-
-### 1) Prefer paired entries for links/handovers
-
-For cross-session workflows, use two custom message types:
-- **Marker** in source session: short line (`Handed off to X` / `Continues in X`).
-- **Source** in new session: header + optional expanded context.
-
-This gives both directions of navigation and keeps history readable.
-
-### 2) Collapsed vs expanded behavior
-
-Keep collapsed view minimal and scannable:
-- one semantic line
-- optional hint (`Press Ctrl+O to expand`) only when extra content exists
-
-Use expanded view for rich content:
-- markdown body
-- multi-line context
-- file lists / instructions
-
-### 3) Renderer resilience
-
-Message renderers should degrade safely:
-- missing `details` => fallback to plain `content`
-- markdown render failure => fallback to plain text
-- unknown fields => ignore, don't throw
-
-### 4) Keep details small and durable
-
-`details` should contain stable identifiers and routing data, not large blobs:
-- session IDs
-- link type (`handoff`, `continue`)
-- short metadata (goal/title)
-
-Put large human-readable content in `content` (for expansion/LLM visibility), not deep nested `details`.
-
-### 5) Use visual hierarchy consistently
-
-For message UIs:
-- muted label + accent target/value (`Continues in <session-name>`)
-- subtle container background for custom message blocks
-- avoid decorative noise; optimize for fast scan in session history
-
-## Pattern: Command with sendMessage Fallback
-
-This combines with the three-tier pattern from `references/modes.md`. Use `sendMessage` as the RPC fallback for commands that use `custom()`:
+Use this when rich TUI output should persist for RPC users or future session readers.
 
 ```typescript
-// Register the renderer once at load time
-pi.registerMessageRenderer("my-results", (message, theme) => {
-  const { items } = message.details;
-  return [
-    theme.bold(`Results (${items.length})`),
-    ...items.map((item: string) => `  ${theme.fg("accent", item)}`),
-  ].join("\n");
+pi.registerMessageRenderer<{ items?: string[] }>("my-results", (message, options, theme) => {
+  const items = message.details?.items;
+  if (!items) return new Text(message.content, 0, 0);
+
+  const visible = options.expanded ? items : items.slice(0, 5);
+  return new Text(
+    [
+      theme.fg("accent", theme.bold(`Results (${items.length})`)),
+      ...visible.map((item) => `  ${theme.fg("muted", item)}`),
+    ].join("\n"),
+    0,
+    0,
+  );
 });
 
 pi.registerCommand("results", {
@@ -137,11 +102,10 @@ pi.registerCommand("results", {
       return;
     }
 
-    const result = await ctx.ui.custom<"closed">((tui, theme, _kb, done) => {
+    const result = await ctx.ui.custom<"closed">((_tui, theme, _keybindings, done) => {
       return new ResultsDisplay(theme, items, () => done("closed"));
     });
 
-    // RPC fallback only: custom() returns undefined in RPC/Print.
     if (result === undefined) {
       pi.sendMessage({
         customType: "my-results",
@@ -154,9 +118,9 @@ pi.registerCommand("results", {
 });
 ```
 
-## notify
+## Notifications
 
-For transient feedback that does not need to persist:
+Use for transient feedback.
 
 ```typescript
 ctx.ui.notify("Operation complete", "info");
@@ -164,13 +128,26 @@ ctx.ui.notify("Something went wrong", "error");
 ctx.ui.notify("Proceed with caution", "warning");
 ```
 
-The second argument is the notification type: `"info"`, `"error"`, or `"warning"`. It affects the color/icon.
+`notify` works in interactive and RPC modes and is a no-op in JSON/print.
 
-`notify` is fire-and-forget. It works in Interactive and RPC modes, and is a no-op in Print mode.
+## Custom Message Design
 
-## Writing custom entries in a new session
+For session-link or handoff workflows, use paired messages:
 
-When using `ctx.newSession({ setup })`, write custom entries directly through the setup `SessionManager`:
+- Source session marker: short line such as `Continues in <session>`.
+- Destination session source: header plus optional expanded context.
+
+Design rules:
+
+- Collapsed message: one semantic line, optional expand hint only when details exist.
+- Expanded message: markdown body, file lists, context, or routing details.
+- Visual hierarchy: muted label, accent target/value, minimal decoration.
+- Details: stable identifiers, link type, session IDs, short metadata.
+- Content: user-readable text and anything the LLM may need.
+
+## Writing Custom Entries in New Sessions
+
+When using `ctx.newSession({ setup })`, write initial custom entries through the setup `SessionManager`.
 
 ```typescript
 await ctx.newSession({
@@ -180,7 +157,18 @@ await ctx.newSession({
       linkType: "handoff",
     });
   },
+  withSession: async (ctx) => {
+    await ctx.sendUserMessage("Continue from this handoff.");
+  },
 });
 ```
 
-Use this pattern for handoff/spawn-like workflows where the new session must start with structured context.
+Use `withSession` for post-switch work.
+
+## Checklist
+
+- [ ] Picked the least persistent API that satisfies the UX.
+- [ ] Custom message renderers return components and handle missing `details`.
+- [ ] Collapsed message views are scannable.
+- [ ] Large content is in `content`, not deeply nested `details`.
+- [ ] `sendMessage` delivery mode is explicit when streaming behavior matters.

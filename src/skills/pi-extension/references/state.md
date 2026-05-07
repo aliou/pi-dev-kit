@@ -1,67 +1,114 @@
 # State Management
 
-Extensions can persist state in the session history. In modern Pi extensions, the usual pattern is to store reconstructible state in tool result `details` and rebuild it from the current branch on `session_start`.
+Prefer reconstructible state. Pi sessions can branch, fork, compact, reload, and resume; extension state must follow the active branch.
 
-## Recommended Pattern: Store State in Tool Result Details
+## Preferred Pattern: Tool Result `details`
 
-When a tool changes extension state, return the latest state in `details`. That keeps the state aligned with normal tool history, branching, and reconstruction.
+When a tool changes state, return the latest snapshot in `details`. Rebuild in-memory state from the current branch on `session_start`.
 
 ```typescript
-export default function (pi: ExtensionAPI) {
-  let items: string[] = [];
+interface TodoState {
+  items: Array<{ id: number; text: string; done: boolean }>;
+  nextId: number;
+}
+
+export default function toolsExtension(pi: ExtensionAPI) {
+  let state: TodoState = { items: [], nextId: 1 };
 
   pi.on("session_start", async (_event, ctx) => {
-    items = [];
+    state = { items: [], nextId: 1 };
     for (const entry of ctx.sessionManager.getBranch()) {
-      if (entry.type === "message" && entry.message.role === "toolResult") {
-        if (entry.message.toolName === "todo") {
-          items = entry.message.details?.items ?? [];
-        }
+      if (entry.type !== "message") continue;
+      if (entry.message.role !== "toolResult") continue;
+      if (entry.message.toolName !== "todo") continue;
+
+      const details = entry.message.details as Partial<TodoState> | undefined;
+      if (details?.items && typeof details.nextId === "number") {
+        state = { items: details.items, nextId: details.nextId };
       }
     }
   });
 
-  pi.registerTool({
+  const todoTool = defineTool({
     name: "todo",
-    // ...
-    async execute() {
-      items.push("Buy groceries");
+    label: "Todo",
+    description: "Manage session todos.",
+    parameters,
+    async execute(_toolCallId, params) {
+      state.items.push({ id: state.nextId++, text: params.text, done: false });
       return {
-        content: [{ type: "text", text: "Added todo item" }],
-        details: { items: [...items] },
+        content: [{ type: "text", text: `Added todo: ${params.text}` }],
+        details: { ...state },
       };
     },
   });
+
+  pi.registerTool(todoTool);
 }
 ```
 
-## Reconstructing State from Session
+Why this works:
 
-When a session loads, reconstruct state in `session_start` by iterating over the current branch or full session through `ctx.sessionManager`:
+- Forks and tree navigation naturally select different branches.
+- Tool results are already ordered in session history.
+- State is visible to renderers without separate storage.
+
+## `appendEntry()`
+
+Use `pi.appendEntry(customType, data)` for extension-specific state or audit entries that should persist but should not enter LLM context.
 
 ```typescript
-pi.on("session_start", async (_event, ctx) => {
-  todoItems = [];
+pi.appendEntry("my-extension-state", {
+  enabled: true,
+  selectedProfile: "default",
+});
+```
 
+Reconstruct from custom entries on `session_start` when the state is not tied to one tool result.
+
+```typescript
+pi.on("session_start", (_event, ctx) => {
   for (const entry of ctx.sessionManager.getBranch()) {
-    if (entry.type === "message" && entry.message.role === "toolResult") {
-      if (entry.message.toolName === "todo") {
-        todoItems = entry.message.details?.items ?? [];
-      }
+    if (entry.type === "custom" && entry.customType === "my-extension-state") {
+      // Rebuild state from entry.data.
     }
   }
 });
 ```
 
-This pattern makes state survive session reloads, forks, and compactions (as long as the entries are included in the compaction summary).
+## `sendMessage()`
 
-## When to Use appendEntry vs sendMessage
+Use `pi.sendMessage()` for persistent user-visible messages that may be rendered with `registerMessageRenderer` and can enter model context depending on delivery.
 
-| | `appendEntry` | `sendMessage` |
-|---|---|---|
-| Rendered as | Tool call/result pair | Assistant message |
-| Custom renderer | Tool's `renderResult` | `registerMessageRenderer` |
-| Use for | State changes, action logs | Information display, command results |
-| LLM sees | The `output` field | The `content` field |
+```typescript
+pi.sendMessage({
+  customType: "my-extension-summary",
+  content: "Summary text the LLM may see",
+  display: true,
+  details: { source: "quota-check" },
+});
+```
 
-Use tool result `details` when the state naturally belongs to a tool call and should follow normal conversation branching. Use `appendEntry` for extension-specific state/history that does not fit a normal tool result. Use `sendMessage` when you are displaying a one-time result.
+Do not use `sendMessage` for hidden internal state. Use tool `details` or `appendEntry`.
+
+## Choosing a State Store
+
+| Store | LLM sees | Branch-aware | Best for |
+|---|---:|---:|---|
+| Tool result `details` | No (`content` yes) | Yes | State caused by tool calls. |
+| `appendEntry` | No | Yes if reconstructing from branch | Internal extension state/history. |
+| `sendMessage` | Yes when delivered | Yes | Persistent user-visible context. |
+| Config file | No | No | User settings, credentials, defaults. |
+| In-memory only | No | No | Caches that can be rebuilt. |
+
+## Compaction
+
+Compaction may remove old detailed entries from active model context, but session history still exists. If state must survive compacted/forked workflows, keep reconstruction logic robust and consider adding summaries via custom messages only when the LLM needs that state.
+
+## Guidelines
+
+- Store snapshots, not deltas, unless replaying deltas is simple and reliable.
+- Rebuild state from `ctx.sessionManager.getBranch()`, not from all entries, when branch behavior matters.
+- Keep persisted `details` small and serializable.
+- Do not store secrets in session entries.
+- Reinitialize in-memory state on `session_start` and clean up resources on `session_shutdown`.
