@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.7.0
+
+### Minor Changes
+
+- e3d118d: Update Pi dev kit guidance, entrypoints, and runtime dependencies for Pi 0.74.0 and the `@earendil-works/*` package namespace.
+
 ## 0.6.5
 
 ### Patch Changes
