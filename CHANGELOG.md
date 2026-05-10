@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.7.1
+
+### Patch Changes
+
+- c1ed76a: Remove `@mariozechner` npm scope from extension:update command and prompt. The legacy scope is no longer published.
+
 ## 0.7.0
 
 ### Minor Changes
