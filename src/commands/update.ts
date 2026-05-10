@@ -1,23 +1,18 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { VERSION } from "@earendil-works/pi-coding-agent";
 
-const NPM_REGISTRY_URLS = [
-  "https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest",
-  "https://registry.npmjs.org/@mariozechner/pi-coding-agent/latest",
-] as const;
+const NPM_REGISTRY_URL =
+  "https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest";
 
 async function fetchLatestVersion(): Promise<string | null> {
-  for (const url of NPM_REGISTRY_URLS) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const data = (await res.json()) as { version?: string };
-      if (data.version) return data.version;
-    } catch {
-      // Try the next registry URL.
-    }
+  try {
+    const res = await fetch(NPM_REGISTRY_URL);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { version?: string };
+    return data.version ?? null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 const UPDATE_PROMPT = `# Update Pi Extensions
@@ -47,7 +42,6 @@ Current Pi core packages are:
 - \`@earendil-works/pi-tui\`
 - \`typebox\`
 
-Legacy packages under \`@mariozechner/*\` may still be present. Treat them as Pi core packages. Prefer \`@earendil-works/*\` when the target version exists on npm; if the new namespace is not published for the target version yet, keep the legacy namespace and report that decision.
 
 For distributed Pi packages:
 - Put imported Pi core packages in \`peerDependencies\` with \`"*"\` and mark each one \`optional: true\` in \`peerDependenciesMeta\`.
@@ -81,7 +75,7 @@ For tools, verify:
 - Every \`promptGuidelines\` bullet names the exact tool, because Pi injects bullets flat into the global Guidelines section. Do not write "this tool".
 - Execute signature is \`(toolCallId, params, signal, onUpdate, ctx)\`; signal comes before \`onUpdate\`.
 - Use \`onUpdate?.(...)\` and forward \`signal\` to \`fetch\`, \`pi.exec\`, SDK clients, and long work.
-- Use \`StringEnum\` from \`@earendil-works/pi-ai\`/legacy \`@mariozechner/pi-ai\` for string enums; avoid \`Type.Union([Type.Literal(...)])\` for model-facing enums.
+- Use \`StringEnum\` from \`@earendil-works/pi-ai\` for string enums; avoid \`Type.Union([Type.Literal(...)])\` for model-facing enums.
 - Use \`prepareArguments(args)\` only for backward-compatible schema shims before validation.
 - Use \`executionMode: "sequential"\` for tools whose sibling calls mutate shared in-memory state or otherwise must not run concurrently.
 - File-mutating tools normalize leading \`@\` in paths and wrap the full read-modify-write window in \`withFileMutationQueue()\`.
@@ -116,7 +110,7 @@ For project structure and package docs, verify:
 ## 5. Create Update Plan
 
 Present a detailed plan with:
-- Package namespace/version changes and whether \`@earendil-works/*\` is available for the target.
+- Package namespace/version changes.
 - Files to change and why.
 - API migrations required by changelogs/docs.
 - Best-practice cleanups found in source, README, skills, prompts, and examples.
