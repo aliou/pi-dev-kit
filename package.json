@@ -26,7 +26,7 @@
     "prompts": [
       "./src/prompts"
     ],
-    "video": "https://assets.aliou.me/pi-extensions/2026-02-02-pi-extension-dev-demo.mp4"
+    "video": "https://assets.aliou.me/github/aliou/pi-dev-kit/demo.mp4"
   },
   "publishConfig": {
     "access": "public"

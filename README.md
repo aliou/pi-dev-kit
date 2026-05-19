@@ -1,4 +1,4 @@
-![banner](https://assets.aliou.me/pi-extensions/banners/pi-dev-kit.png)
+![banner](https://assets.aliou.me/github/aliou/pi-dev-kit/banner.png)
 
 # Pi Dev Kit
 
@@ -11,7 +11,7 @@ Tools and commands for building, maintaining, and updating Pi extensions.
 https://github.com/user-attachments/assets/44a96009-0653-4803-8590-d5a8a5131f4c
 
 <small>
-  <a href="https://assets.aliou.me/pi-extensions/2026-02-02-pi-extension-dev-demo.mp4">Non sped-up version</a>
+  <a href="https://assets.aliou.me/github/aliou/pi-dev-kit/demo.mp4">Non sped-up version</a>
 </small>
 
 
