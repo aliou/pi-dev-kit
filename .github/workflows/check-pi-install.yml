@@ -1,0 +1,43 @@
+name: Check Pi Install
+
+on:
+  workflow_call:
+    inputs:
+      repository:
+        description: "GitHub repository to install, e.g. aliou/pi-linkup."
+        required: true
+        type: string
+      ref:
+        description: "Git ref, tag, or commit to install. Defaults to the caller commit SHA."
+        required: false
+        type: string
+        default: ""
+      pi-version:
+        description: "Pi npm package version to install."
+        required: false
+        type: string
+        default: "latest"
+
+jobs:
+  check-pi-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install Pi
+        run: npm install --global @earendil-works/pi-coding-agent@${{ inputs.pi-version }}
+
+      - name: Check package installs from git
+        env:
+          HOME: ${{ runner.temp }}/pi-home
+        run: |
+          set -euo pipefail
+          ref="${{ inputs.ref }}"
+          if [ -z "$ref" ]; then
+            ref="${{ github.sha }}"
+          fi
+
+          source="https://github.com/${{ inputs.repository }}@$ref"
+          pi install "$source"
