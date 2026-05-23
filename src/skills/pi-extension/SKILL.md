@@ -117,7 +117,7 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 22. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
 23. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
 24. No `.js` extensions in TypeScript imports.
-25. Pi core packages you import belong in optional `peerDependencies` with `"*"`, and exact target versions in `devDependencies`.
+25. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
 
 ## Completion Checklist
 

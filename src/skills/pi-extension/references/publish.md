@@ -32,7 +32,7 @@ A publishable package needs Pi metadata and discoverability fields.
 
 Use the legacy `@mariozechner/*` namespace only while the target Pi packages are not published under `@earendil-works/*`.
 
-Pi core packages imported at runtime belong in optional `peerDependencies` with `"*"`. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
+Pi core packages imported at runtime belong in optional `peerDependencies`. Use `"*"` by default. Only use a minimum range such as `">=0.75.0"` when code requires an API introduced after Pi 0.74.0, and set the minimum to the introducing version. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
 
 ## Installation Specs
 
@@ -140,7 +140,7 @@ Run the repo's public-dependency check when available, for example `pnpm run che
 - [ ] `files` lists only shipped files users need.
 - [ ] `pi.extensions`, `pi.skills`, `pi.prompts`, and `pi.themes` paths are correct.
 - [ ] Demo `pi.video` or `pi.image` metadata is present when available.
-- [ ] Imported Pi core packages are optional peers with `"*"`.
+- [ ] Imported Pi core packages are optional peers with `"*"`, unless a post-0.74.0 API requires a documented minimum range.
 - [ ] Imported Pi core packages are exact dev dependencies for type checking.
 - [ ] Third-party runtime packages are in `dependencies`.
 - [ ] No private workspace dependencies in public packages.

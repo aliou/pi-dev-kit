@@ -146,7 +146,8 @@ Pi provides these runtime packages to extensions:
 
 For any of these that you import:
 
-- Put them in `peerDependencies` with `"*"`.
+- Put them in `peerDependencies` with `"*"` by default.
+- Use a minimum range such as `">=0.75.0"` only when code requires an API introduced after Pi 0.74.0, using the introducing version as the minimum.
 - Mark them `optional: true` in `peerDependenciesMeta`.
 - Put exact target versions in `devDependencies` for type checking.
 - Do not bundle them.
@@ -428,7 +429,7 @@ Do not publish packages that depend on private workspace packages.
 
 - [ ] One entry point per feature directory.
 - [ ] No root fan-out registrar in new code.
-- [ ] Pi core imports are optional peers with `"*"` and exact dev deps.
+- [ ] Pi core imports are optional peers with `"*"` unless a post-0.74.0 API requires a documented minimum range, and exact dev deps.
 - [ ] Third-party runtime packages are in `dependencies`.
 - [ ] Config uses raw/resolved TypeScript interfaces.
 - [ ] Settings use `registerSettingsCommand` when configurable.

@@ -44,7 +44,9 @@ Current Pi core packages are:
 
 
 For distributed Pi packages:
-- Put imported Pi core packages in \`peerDependencies\` with \`"*"\` and mark each one \`optional: true\` in \`peerDependenciesMeta\`.
+- Put imported Pi core packages in \`peerDependencies\` and mark each one \`optional: true\` in \`peerDependenciesMeta\`.
+- Use \`"*"\` for Pi core peer ranges by default, per Pi package docs.
+- Only use a minimum range such as \`">=0.75.0"\` when source code uses an API that the changelog/docs show was introduced after Pi 0.74.0. In that case, set the minimum to the exact version that introduced the required API.
 - Keep the same Pi core packages in \`devDependencies\` at the exact target version for local type checking.
 - Keep \`typebox\` 1.x. Do not use \`@sinclair/typebox\` in new code.
 
