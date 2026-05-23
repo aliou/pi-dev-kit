@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.7.2
+
+### Patch Changes
+
+- dd5f90d: Update extension guidance to default Pi core peer dependency ranges to `*`, using minimum ranges only for APIs introduced after Pi 0.74.0.
+
 ## 0.7.1
 
 ### Patch Changes
