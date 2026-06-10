@@ -59,4 +59,4 @@ Parses the Pi changelog and returns entries for a specific version (or the lates
 
 ## Compatibility
 
-Tested against Pi 0.74.0 and the `@earendil-works/*` Pi package namespace.
+Tested against Pi 0.79.1 and the `@earendil-works/*` Pi package namespace.
