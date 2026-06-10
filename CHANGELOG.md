@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.7.3
+
+### Patch Changes
+
+- 79357c5: Update Pi dev dependencies to 0.79.1
+
 ## 0.7.2
 
 ### Patch Changes
