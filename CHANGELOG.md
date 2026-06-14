@@ -1,5 +1,11 @@
 # @aliou/pi-dev-kit
 
+## 0.8.0
+
+### Minor Changes
+
+- d68c481: Update pi-extension skill to document the multi-extension pattern (src/ Pi-agnostic core, extensions/ for Pi-facing entry points, event bus, nested config split, migration pattern). Preserve existing extension structures when modifying -- don't migrate unless the user asks.
+
 ## 0.7.3
 
 ### Patch Changes
