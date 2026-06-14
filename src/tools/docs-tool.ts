@@ -125,7 +125,7 @@ const docsTool = defineTool({
     }
 
     // Check for missing expected fields in details to detect errors
-    if (!details || !details.docFiles) {
+    if (!details?.docFiles) {
       const text = result.content[0];
       return new Text(
         text?.type === "text" && text.text ? text.text : "No result",
