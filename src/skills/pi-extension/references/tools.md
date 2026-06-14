@@ -25,11 +25,17 @@ import { type Static, Type } from "typebox";
 
 Use legacy `@mariozechner/*` imports only when the target `@earendil-works/*` package is not available yet.
 
-## Minimal Tool Entry Point
+## Tool Extension Entry Point
 
-Tool entry points are normal Pi extension entry points. Export a default function and list the file in `package.json` `pi.extensions`.
+Tool extensions live under `extensions/` and are normal Pi extension entry points. Export a default function and list the file in `package.json` `pi.extensions`.
 
 ```typescript
+// extensions/tools/index.ts
+import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { defineTool } from "@earendil-works/pi-coding-agent";
+import { type Static, Type } from "typebox";
+import { configLoader } from "../../src/config";
+
 const parameters = Type.Object({
   query: Type.String({ description: "Search query" }),
   limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
@@ -63,9 +69,13 @@ const myTool = defineTool({
 });
 
 export default function toolsExtension(pi: ExtensionAPI) {
+  await configLoader.load();
+  if (!configLoader.getConfig().tools.enabled) return;
   pi.registerTool(myTool);
 }
 ```
+
+If the tool extension is a sub-extension, register with the main extension via the event bus (see `references/structure.md`).
 
 ## `defineTool()`
 

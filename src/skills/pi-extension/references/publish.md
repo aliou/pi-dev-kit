@@ -15,9 +15,9 @@ A publishable package needs Pi metadata and discoverability fields.
   "private": false,
   "keywords": ["pi-package", "pi-extension", "pi"],
   "publishConfig": { "access": "public" },
-  "files": ["src", "README.md"],
+  "files": ["src", "extensions", "schema.json", "README.md", "!src/**/*.test.ts", "!extensions/**/*.test.ts"],
   "pi": {
-    "extensions": ["./src/tools/index.ts", "./src/commands/index.ts"]
+    "extensions": ["./extensions/my-domain/index.ts", "./extensions/feature-a/index.ts"]
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -30,9 +30,9 @@ A publishable package needs Pi metadata and discoverability fields.
 }
 ```
 
-Use the legacy `@mariozechner/*` namespace only while the target Pi packages are not published under `@earendil-works/*`.
-
 Pi core packages imported at runtime belong in optional `peerDependencies`. Use `"*"` by default. Only use a minimum range such as `">=0.75.0"` when code requires an API introduced after Pi 0.74.0, and set the minimum to the introducing version. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
+
+The `files` array must include both `src` and `extensions` directories, plus `schema.json`.
 
 ## Installation Specs
 
@@ -138,7 +138,8 @@ Run the repo's public-dependency check when available, for example `pnpm run che
 - [ ] `publishConfig.access` is `public` for scoped public packages.
 - [ ] `keywords` includes `pi-package`.
 - [ ] `files` lists only shipped files users need.
-- [ ] `pi.extensions`, `pi.skills`, `pi.prompts`, and `pi.themes` paths are correct.
+- [ ] `pi.extensions` paths point to `./extensions/...` entry points.
+- [ ] `pi.skills`, `pi.prompts`, and `pi.themes` paths are correct.
 - [ ] Demo `pi.video` or `pi.image` metadata is present when available.
 - [ ] Imported Pi core packages are optional peers with `"*"`, unless a post-0.74.0 API requires a documented minimum range.
 - [ ] Imported Pi core packages are exact dev dependencies for type checking.

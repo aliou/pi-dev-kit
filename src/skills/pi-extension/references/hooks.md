@@ -248,7 +248,7 @@ For transparent LLM bash tool rewriting, use a bash spawn hook instead.
 
 ## Bash Spawn Hook
 
-`createBashTool(cwd, { spawnHook })` creates a bash tool that rewrites command/cwd/env before execution. Registering a tool named `bash` overrides the built-in bash tool.
+`createBashTool(cwd, { spawnHook })` creates a bash tool that rewrites command/cwd/env before execution. Registering a tool named `bash` overrides the built-in bash tool. Place this under `extensions/` as its own extension entry point.
 
 ```typescript
 import { createBashTool, type BashSpawnContext } from "@earendil-works/pi-coding-agent";

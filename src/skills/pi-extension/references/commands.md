@@ -160,11 +160,11 @@ If the LLM should use a capability autonomously, make it a tool. If the user int
 
 ## Component Extraction
 
-Keep handlers thin. Extract rich components near the command that uses them.
+Keep handlers thin. Extract rich components near the extension that uses them.
 
 ```
-src/commands/quotas.ts
-src/commands/components/quotas-display.ts
+extensions/my-domain/commands/quotas.ts
+extensions/my-domain/commands/components/quotas-display.ts
 ```
 
 Shared components can live in `src/components/`, but do not list component files in `pi.extensions`.

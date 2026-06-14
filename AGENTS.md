@@ -12,4 +12,11 @@ Public Pi extension providing tools and prompts for building, maintaining, and u
 
 ## Structure
 
-- `src/index.ts` - entry, `src/commands/` - slash commands, `src/tools/` - tool impls, `src/skills/` - dev guidance, `src/prompts/` - templates
+- `src/tools/` - tool impls (changelog, docs, package-manager, version)
+- `src/commands/` - slash commands (extensions:update)
+- `src/skills/` - dev guidance (pi-extension skill with references)
+- `src/prompts/` - templates
+
+## Deviations
+
+This extension uses the legacy single-directory pattern (`src/tools/`, `src/commands/`) instead of the multi-extension pattern (`extensions/`). It has no config and no sub-extensions, so the overhead of the event bus and nested config is not justified. New extensions should default to the multi-extension pattern documented in the pi-extension skill.

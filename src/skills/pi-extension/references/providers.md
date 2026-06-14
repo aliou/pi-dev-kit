@@ -32,7 +32,7 @@ export default function providersExtension(pi: ExtensionAPI) {
 }
 ```
 
-Use legacy `@mariozechner/*` imports only when the target `@earendil-works/*` package is not available yet.
+Use `@earendil-works/*` imports in all new code.
 
 ## Async Model Discovery
 

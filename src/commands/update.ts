@@ -103,10 +103,11 @@ For extension APIs, verify:
 - Use SDK helpers for Pi paths instead of \`homedir()\` when helpers exist.
 
 For project structure and package docs, verify:
-- Prefer one extension entry point per feature directory: \`src/tools/index.ts\`, \`src/commands/index.ts\`, \`src/hooks/index.ts\`, \`src/providers/index.ts\`.
-- Avoid a root \`src/index.ts\` fan-out registrar for new code.
-- Keep domain logic in Pi-free core modules and tools as thin wrappers.
-- Config uses TypeScript raw/resolved interfaces with \`ConfigLoader<Raw, Resolved>\`, not TypeBox schemas.
+- Prefer one extension entry point per domain directory under \`extensions/\`. The main extension owns config loading, settings, and feature discovery. Sub-extensions register via the event bus.
+- \`src/\` is Pi-agnostic: no imports from \`@earendil-works/pi-*\`. All Pi registration code lives under \`extensions/\`.
+- Config in \`src/config/\` with \`types.ts\`, \`defaults.ts\`, \`loader.ts\`, and \`migration/\`. Use per-feature nested config sections.
+- Event bus constants and payload types in \`src/events.ts\`.
+- Keep domain logic in Pi-free core modules and extensions as thin wrappers.
 - No \`.js\` suffixes in TypeScript imports.
 
 ## 5. Create Update Plan

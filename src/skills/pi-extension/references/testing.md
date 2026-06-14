@@ -44,12 +44,12 @@ Test event hooks by triggering the relevant actions:
 
 ## Unit Testing Core Logic
 
-The core/lib pattern makes domain logic testable without the Pi framework. Extract business logic into modules that don't import from Pi core packages (`@earendil-works/pi-coding-agent` or legacy `@mariozechner/pi-coding-agent`) and test them directly.
+The multi-extension pattern makes domain logic testable without the Pi framework. `src/` contains no imports from Pi core packages (`@earendil-works/pi-*`). Extract business logic into modules under `src/core/` or `src/` and test them directly.
 
 ### Testable core modules
 
 ```typescript
-// src/manager.ts — no Pi imports
+// src/core/manager.ts — no Pi imports
 export class ProcessManager {
   start(name: string, command: string, cwd: string): ProcessInfo { ... }
   get(id: string): ProcessInfo | undefined { ... }
@@ -58,7 +58,7 @@ export class ProcessManager {
 ```
 
 ```typescript
-// src/manager.test.ts
+// src/core/manager.test.ts
 import { describe, it, expect, afterEach } from "vitest";
 import { ProcessManager } from "./manager";
 
@@ -162,7 +162,7 @@ Extensions use vitest. Add to `package.json`:
 ```json
 {
   "devDependencies": {
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.8"
   },
   "scripts": {
     "test": "vitest run",
