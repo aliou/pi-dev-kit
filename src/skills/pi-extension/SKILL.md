@@ -108,26 +108,27 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 8. Always call `onUpdate?.(...)` with optional chaining.
 9. Every tool needs `label`. Add `promptSnippet` when the tool should appear in Available tools.
 10. Every `promptGuidelines` bullet must name the exact tool. Do not say `this tool`.
-11. Use `StringEnum` from `pi-ai` for model-facing string enums. Do not use `Type.Union([Type.Literal(...)])` for enums.
-12. Handle `renderResult` partial state first with a stable tool-scoped message.
-13. Detect tool errors by missing expected `details` fields or `context.isError`; thrown tools receive `details: {}`.
-14. Use `ToolCallHeader`, `ToolBody`, and conditional `ToolFooter` for tool rendering.
-15. Use existing TUI components before creating custom components.
-16. `ctx.ui.custom()` needs RPC/print fallback. Interactive close paths must not rely on `done(undefined)`. Inline components that wait for an answer pass `blocked: { kind, message }`.
-17. Keybinding hints use the `keyHint()`/`keyText()` injected into the tool render context and message/entry render options, never an import: an import can resolve to another pi-coding-agent copy that does not see pi's keybindings.
-18. Dialog methods that gate behavior need `ctx.hasUI` checks; fire-and-forget UI methods do not.
-19. Forward abort signals to `fetch`, `pi.exec`, SDK clients, and long-running work.
-20. Use `pi.exec()` for normal shell commands. Do not use Node `child_process` unless a documented long-lived streaming process requires it.
-21. File-mutating tools must normalize leading `@` paths and use `withFileMutationQueue()` for the full read-modify-write window.
-22. Large output tools must truncate output, report truncation, and save full output to a temp file.
-23. Store branch-aware tool state in tool result `details` and reconstruct from `ctx.sessionManager.getBranch()`.
-24. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`.
-25. Treat `await ctx.reload(); return;` as terminal in a command handler.
-26. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
-27. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
-28. No `.js` extensions in TypeScript imports.
-29. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
-30. `tsconfig.json` must include both `src/**/*.ts` and `extensions/**/*.ts`.
+11. Use `StringEnum` from `pi-ai` for model-facing string enums. Do not use `Type.Union([Type.Literal(...)])` for enums. On pi >= 1.5.0, `Type.Optional(StringEnum(...))` loses its optionality in `Static` inference; keep enum params required or verify the inferred type.
+12. Tool parameter schemas are validated as JSON Schema: `Type.Refine()` refinements are not run, `Type.BigInt()`/`Type.Undefined()`/`Type.Void()` reject every argument, codecs do not decode, and `Format.Set()` formats are not checked. Check such constraints in `execute` and keep schemas plain JSON Schema.
+13. Handle `renderResult` partial state first with a stable tool-scoped message.
+14. Detect tool errors by missing expected `details` fields or `context.isError`; thrown tools receive `details: {}`.
+15. Use `ToolCallHeader`, `ToolBody`, and conditional `ToolFooter` for tool rendering.
+16. Use existing TUI components before creating custom components.
+17. `ctx.ui.custom()` needs RPC/print fallback. Interactive close paths must not rely on `done(undefined)`. Inline components raised by the agent that wait for an answer pass `blocked: { kind, message }`; do not report dialogs the user opened themselves.
+18. Keybinding hints use the `keyHint()`/`keyText()` injected into the tool render context and message/entry render options, never an import: an import can resolve to another pi-coding-agent copy that does not see pi's keybindings.
+19. Dialog methods that gate behavior need `ctx.hasUI` checks; fire-and-forget UI methods do not.
+20. Forward abort signals to `fetch`, `pi.exec`, SDK clients, and long-running work.
+21. Use `pi.exec()` for normal shell commands. Do not use Node `child_process` unless a documented long-lived streaming process requires it.
+22. File-mutating tools must normalize leading `@` paths and use `withFileMutationQueue()` for the full read-modify-write window.
+23. Large output tools must truncate output, report truncation, and save full output to a temp file.
+24. Store branch-aware tool state in tool result `details` and reconstruct from `ctx.sessionManager.getBranch()`.
+25. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`.
+26. Treat `await ctx.reload(); return;` as terminal in a command handler.
+27. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
+28. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
+29. No `.js` extensions in TypeScript imports.
+30. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
+31. `tsconfig.json` must include both `src/**/*.ts` and `extensions/**/*.ts`.
 
 ## Completion Checklist
 

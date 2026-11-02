@@ -163,6 +163,10 @@ const parameters = Type.Object({
 
 Use `StringEnum` from `pi-ai` for model-facing string enums. Avoid `Type.Union([Type.Literal(...)])`; it is not compatible with all providers.
 
+Pi validates tool arguments as JSON Schema whatever built the schema. TypeBox features outside JSON Schema do not apply to tool arguments: `Type.Refine()` refinements are not run (check such constraints in `execute`), `Type.BigInt()`, `Type.Undefined()`, and `Type.Void()` reject every argument, codecs do not decode, and `Format.Set()` formats are not checked. Keep parameter schemas plain JSON Schema.
+
+`StringEnum` is a TypeBox `TUnsafe`. On pi >= 1.5.0, `Type.Optional(StringEnum(...))` loses its optionality in `Static` inference, so enum params typed that way become required. Keep enum params required, or verify the inferred params type after a pi upgrade.
+
 ## Prompt Metadata
 
 `promptSnippet` and `promptGuidelines` affect different system prompt sections:
@@ -334,7 +338,10 @@ Guidelines:
 - Omit empty footers.
 - Use `Markdown` with `getMarkdownTheme()` for rich markdown.
 - Use `context.lastComponent` only when reusing a component instance buys real performance.
+- The render context also carries `durationMs` (execution time of the final result, `undefined` while it runs) alongside `expanded`, `isPartial`, and `isError`.
 - Set `renderShell: "self"` only when the default boxed shell prevents the desired layout.
+
+Use `pi.registerToolRenderer()` to choose how calls to a tool you did not register are drawn, such as MCP tools in resumed sessions.
 
 ## Output Truncation
 

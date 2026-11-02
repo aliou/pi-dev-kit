@@ -106,6 +106,8 @@ pi.on("before_agent_start", async (event) => {
 
 `event.systemPromptOptions` exposes structured prompt inputs such as selected tools, tool snippets, prompt guidelines, context files, and loaded skills. `ctx.getSystemPrompt()` reflects changes made by earlier `before_agent_start` handlers in the chain.
 
+The hook also fires for runs started by `pi.sendMessage(..., { triggerTurn: true })` while idle. The event is a union on `messageType`: `"user"` events carry `prompt` and `images`, and `"custom"` events carry the starting `message` and no `prompt`. Handlers that should act only on user prompts check `event.messageType === "user"`. The session counts as busy while the hook runs, and messages returned by handlers are added to both kinds of run.
+
 ### `message_end`
 
 `message_end` handlers can replace a finalized message. Keep the same role.

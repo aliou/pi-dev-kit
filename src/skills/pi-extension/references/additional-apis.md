@@ -127,7 +127,7 @@ pi.sendUserMessage("Focus on tests next.", { deliverAs: "steer" });
 pi.sendUserMessage("After that, summarize.", { deliverAs: "followUp" });
 ```
 
-When the agent is streaming, specify `deliverAs: "steer"` or `"followUp"`.
+When the agent is streaming or a run is starting, specify `deliverAs: "steer"` or `"followUp"`; it is required whenever the session is busy, including while `before_agent_start` handlers run.
 
 ### `pi.sendMessage(message, options?)`
 
@@ -172,10 +172,13 @@ const result = await pi.exec("git", ["status", "--porcelain"], {
   cwd: ctx.cwd,
   signal,
   timeout: 5_000,
+  maxBuffer: 10 * 1024 * 1024, // cap combined stdout + stderr
 });
 
-// result.stdout, result.stderr, result.code, result.killed
+// result.stdout, result.stderr, result.code, result.killed, result.truncated
 ```
+
+Past the output cap (default: the smaller of 256 MiB and the runtime string limit, or `maxBuffer`), the command is terminated and `result.truncated` is true. Output past the cap is not included.
 
 Do not use Node `child_process` APIs for normal command execution. The only exception is a documented long-lived streaming process with direct stdin/stdout needs that `pi.exec()` cannot support.
 

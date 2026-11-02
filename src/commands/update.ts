@@ -78,6 +78,8 @@ For tools, verify:
 - Execute signature is \`(toolCallId, params, signal, onUpdate, ctx)\`; signal comes before \`onUpdate\`.
 - Use \`onUpdate?.(...)\` and forward \`signal\` to \`fetch\`, \`pi.exec\`, SDK clients, and long work.
 - Use \`StringEnum\` from \`@earendil-works/pi-ai\` for string enums; avoid \`Type.Union([Type.Literal(...)])\` for model-facing enums.
+- On pi >= 1.5.0, \`Type.Optional(StringEnum(...))\` loses its optionality in \`Static\` inference; keep enum params required or verify the inferred type.
+- Since pi 1.5.0, tool arguments are validated as JSON Schema: \`Type.Refine()\` refinements, \`Type.BigInt()\`/\`Type.Undefined()\`/\`Type.Void()\`, codecs, and \`Format.Set()\` formats no longer apply. Move such checks into \`execute\` and keep schemas plain JSON Schema.
 - Use \`prepareArguments(args)\` only for backward-compatible schema shims before validation.
 - Use \`executionMode: "sequential"\` for tools whose sibling calls mutate shared in-memory state or otherwise must not run concurrently.
 - File-mutating tools normalize leading \`@\` in paths and wrap the full read-modify-write window in \`withFileMutationQueue()\`.
@@ -93,7 +95,7 @@ For rendering and TUI, verify:
 - Use \`Container\`, \`Text\`, \`Markdown\`, \`SelectList\`, \`SettingsList\`, \`BorderedLoader\`, and \`DynamicBorder\` before writing custom UI.
 - Custom components implement \`render(width): string[]\`, \`handleInput(data)\`, and \`invalidate()\`; use \`matchesKey\` and keep rendered lines within width.
 - \`ctx.ui.custom()\` has RPC/print fallback and interactive close paths use explicit sentinels such as \`null\` or \`"closed"\`, not \`done(undefined)\`.
-- Inline \`ctx.ui.custom()\` components that wait for an answer pass \`blocked: { kind: "question" | "permission" | "auth", message }\` so terminals with program status (OSC 7501) show pi as blocked while the component is visible. Overlays ignore the option; loaders and informational viewers do not need it.
+- Inline \`ctx.ui.custom()\` components that wait for an answer pass \`blocked: { kind: "question" | "permission" | "auth", message }\` so terminals with program status (OSC 7501) show pi as blocked while the component is visible. Only for agent-initiated prompts, such as permission gates; not for dialogs the user opened themselves. Overlays ignore the option; loaders and informational viewers do not need it.
 
 For extension APIs, verify:
 - Hook return shapes match current Pi docs: \`input\` returns \`{ action: "continue" | "transform" | "handled", ... }\`; \`before_agent_start\` returns \`{ systemPrompt }\`; \`tool_result\` returns result patches.

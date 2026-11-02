@@ -86,6 +86,10 @@ Use:
 
 Commit the changeset with the change it describes.
 
+### Changelog shown after updates
+
+Pi reads the package's `CHANGELOG.md` at the root (or the file `pi.changelogPath` points at; `""` disables it) and, on the next fresh launch after an update, shows entries newer than the last seen version under "Extension Updates". Use version headings such as `## 0.12.0` or `## [0.12.0] - 2026-01-01` whose version matches `package.json`; a git package only shows entries when that version increases. Only packages that load at least one extension show a changelog.
+
 ### Manual release
 
 ```bash

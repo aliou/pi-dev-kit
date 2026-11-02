@@ -124,7 +124,7 @@ const result = await ctx.ui.custom<string | null>(
 ```
 
 - `kind` is `"question"`, `"permission"`, or `"auth"`.
-- Only pass `blocked` when the component waits for an answer. Loaders and informational viewers do not need it.
+- Only pass `blocked` when an agent-initiated component waits for an answer, such as a permission prompt raised by a tool call. Do not report dialogs the user opened themselves (slash-command pickers, settings panels, informational viewers): the user is already looking at them, and flipping program status for them is noise.
 - Overlays ignore the option.
 
 ## Overlay Mode
