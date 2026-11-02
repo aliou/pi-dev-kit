@@ -13,7 +13,6 @@ import {
   defineTool,
   formatSize,
   getMarkdownTheme,
-  keyHint,
   truncateHead,
   truncateTail,
   withFileMutationQueue,
@@ -290,8 +289,10 @@ Header extraction order:
 
 Handle partial state first, then errors, then normal output.
 
+The render context carries the injected `keyHint()`/`keyText()` for the host's configured keybindings. Use `context.keyHint(...)` for expand hints and never import `keyHint`/`keyText`: an import can resolve to another pi-coding-agent copy that does not see pi's keybindings, rendering the hint without the key.
+
 ```typescript
-renderResult(result, options, theme) {
+renderResult(result, options, theme, context) {
   if (options.isPartial) {
     return new Text(theme.fg("muted", "Repo Tree: fetching..."), 0, 0);
   }
@@ -310,7 +311,7 @@ renderResult(result, options, theme) {
 
   const footerItems = [];
   if (!options.expanded && details.entries.length > 5) {
-    footerItems.push({ value: keyHint("app.tools.expand", "to expand") });
+    footerItems.push({ value: context.keyHint("app.tools.expand", "to expand") });
   }
 
   return new ToolBody(

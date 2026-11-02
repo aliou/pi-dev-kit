@@ -110,6 +110,23 @@ Callback args:
 
 Use explicit non-`undefined` sentinels for close/cancel paths (`null`, `false`, `"closed"`). In RPC and print modes, `custom()` returns `undefined`, so `done(undefined)` makes fallback detection ambiguous.
 
+## Blocked Status
+
+Custom components do not report pi as waiting for the user, because `custom()` also hosts loaders and other non-blocking UI. When an inline component waits for an answer, pass `blocked` so terminals that support program status (OSC 7501) show pi as blocked while the component is visible:
+
+```typescript
+const result = await ctx.ui.custom<string | null>(
+  (tui, theme, keybindings, done) => {
+    // ... build the component
+  },
+  { blocked: { kind: "permission", message: "Approve tool call" } },
+);
+```
+
+- `kind` is `"question"`, `"permission"`, or `"auth"`.
+- Only pass `blocked` when the component waits for an answer. Loaders and informational viewers do not need it.
+- Overlays ignore the option.
+
 ## Overlay Mode
 
 Use overlays for modal or side-panel UI without clearing existing content.
@@ -327,5 +344,6 @@ Read `references/modes.md` before using `ctx.ui.custom()` in commands or hooks.
 - [ ] `invalidate()` clears cached themed output.
 - [ ] Key handling uses `matchesKey()`.
 - [ ] `ctx.ui.custom()` uses explicit sentinels and has RPC/print fallback.
+- [ ] Inline `ctx.ui.custom()` components that wait for an answer pass `blocked: { kind, message }`.
 - [ ] TUI-only methods are not treated as working in RPC.
 - [ ] Tool/message renderers return components.

@@ -31,7 +31,6 @@ import {
   defineTool,
   formatSize,
   getMarkdownTheme,
-  keyHint,
   truncateHead,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
@@ -114,20 +113,21 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 13. Detect tool errors by missing expected `details` fields or `context.isError`; thrown tools receive `details: {}`.
 14. Use `ToolCallHeader`, `ToolBody`, and conditional `ToolFooter` for tool rendering.
 15. Use existing TUI components before creating custom components.
-16. `ctx.ui.custom()` needs RPC/print fallback. Interactive close paths must not rely on `done(undefined)`.
-17. Dialog methods that gate behavior need `ctx.hasUI` checks; fire-and-forget UI methods do not.
-18. Forward abort signals to `fetch`, `pi.exec`, SDK clients, and long-running work.
-19. Use `pi.exec()` for normal shell commands. Do not use Node `child_process` unless a documented long-lived streaming process requires it.
-20. File-mutating tools must normalize leading `@` paths and use `withFileMutationQueue()` for the full read-modify-write window.
-21. Large output tools must truncate output, report truncation, and save full output to a temp file.
-22. Store branch-aware tool state in tool result `details` and reconstruct from `ctx.sessionManager.getBranch()`.
-23. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`.
-24. Treat `await ctx.reload(); return;` as terminal in a command handler.
-25. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
-26. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
-27. No `.js` extensions in TypeScript imports.
-28. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
-29. `tsconfig.json` must include both `src/**/*.ts` and `extensions/**/*.ts`.
+16. `ctx.ui.custom()` needs RPC/print fallback. Interactive close paths must not rely on `done(undefined)`. Inline components that wait for an answer pass `blocked: { kind, message }`.
+17. Keybinding hints use the `keyHint()`/`keyText()` injected into the tool render context and message/entry render options, never an import: an import can resolve to another pi-coding-agent copy that does not see pi's keybindings.
+18. Dialog methods that gate behavior need `ctx.hasUI` checks; fire-and-forget UI methods do not.
+19. Forward abort signals to `fetch`, `pi.exec`, SDK clients, and long-running work.
+20. Use `pi.exec()` for normal shell commands. Do not use Node `child_process` unless a documented long-lived streaming process requires it.
+21. File-mutating tools must normalize leading `@` paths and use `withFileMutationQueue()` for the full read-modify-write window.
+22. Large output tools must truncate output, report truncation, and save full output to a temp file.
+23. Store branch-aware tool state in tool result `details` and reconstruct from `ctx.sessionManager.getBranch()`.
+24. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`.
+25. Treat `await ctx.reload(); return;` as terminal in a command handler.
+26. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
+27. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
+28. No `.js` extensions in TypeScript imports.
+29. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
+30. `tsconfig.json` must include both `src/**/*.ts` and `extensions/**/*.ts`.
 
 ## Completion Checklist
 
