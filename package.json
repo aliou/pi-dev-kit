@@ -32,6 +32,7 @@
     "access": "public"
   },
   "files": [
+    "CHANGELOG.md",
     "src",
     "README.md"
   ],
