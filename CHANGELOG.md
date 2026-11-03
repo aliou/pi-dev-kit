@@ -1,5 +1,13 @@
 # @aliou/pi-dev-kit
 
+## 0.8.1
+
+### Patch Changes
+
+- 2c8fde1: Ship `CHANGELOG.md` in the npm tarball so pi can show the changelog when the extension updates.
+- 78392c3: Update the pi-extension skill and update command guidance for pi 1.5.0: document the `blocked` option for inline `ctx.ui.custom()` components that wait for an answer, and teach the injected `keyHint()`/`keyText()` from render contexts instead of importing them, which can resolve to a copy that does not see pi's keybindings.
+- b1459b7: Update the pi-extension skill and update command guidance for pi changes since 1.0.0: tool arguments are validated as JSON Schema so TypeBox-only features (`Type.Refine()`, `Type.BigInt()`, codecs, `Format.Set()`) no longer apply and `Type.Optional(StringEnum(...))` loses optionality in `Static` inference on pi >= 1.5.0; `before_agent_start` also fires for `sendMessage`-triggered runs and the event is a union on `messageType`; `pi.exec()` gains `maxBuffer` and `result.truncated`; `sendUserMessage` requires `deliverAs` while the session is busy; document `pi.registerToolRenderer()`, `durationMs` in the tool render context, and the package changelog shown after updates.
+
 ## 0.8.0
 
 ### Minor Changes
