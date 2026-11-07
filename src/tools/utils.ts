@@ -9,18 +9,30 @@ const PI_PACKAGE_NAMES = [
   "@mariozechner/pi-coding-agent",
 ] as const;
 
+function resolvePackageDir(packageName: string): string | null {
+  try {
+    return path.dirname(require.resolve(`${packageName}/package.json`));
+  } catch {
+    return null;
+  }
+}
+
+function readPackageJsonSafe(filePath: string): { name?: string } | null {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Find the currently running Pi installation directory by resolving the
  * pi-coding-agent package location.
  */
 export function findPiInstallation(): string | null {
   for (const packageName of PI_PACKAGE_NAMES) {
-    try {
-      const piModulePath = require.resolve(`${packageName}/package.json`);
-      return path.dirname(piModulePath);
-    } catch {
-      // Try the next package namespace.
-    }
+    const packageDir = resolvePackageDir(packageName);
+    if (packageDir) return packageDir;
   }
 
   const scriptPath = process.argv[1];
@@ -30,14 +42,14 @@ export function findPiInstallation(): string | null {
     while (currentDir !== path.dirname(currentDir)) {
       const packageJsonPath = path.join(currentDir, "package.json");
       if (fs.existsSync(packageJsonPath)) {
-        try {
-          const packageContent = fs.readFileSync(packageJsonPath, "utf-8");
-          const packageJson = JSON.parse(packageContent);
-          if (PI_PACKAGE_NAMES.includes(packageJson.name)) {
-            return currentDir;
-          }
-        } catch {
-          // Continue searching
+        const packageJson = readPackageJsonSafe(packageJsonPath);
+        if (
+          packageJson &&
+          PI_PACKAGE_NAMES.includes(
+            packageJson.name as (typeof PI_PACKAGE_NAMES)[number],
+          )
+        ) {
+          return currentDir;
         }
       }
       currentDir = path.dirname(currentDir);

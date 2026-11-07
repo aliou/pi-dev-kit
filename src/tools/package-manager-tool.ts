@@ -13,6 +13,14 @@ import { type Static, Type } from "typebox";
 const Params = Type.Object({});
 type PackageManagerParams = Static<typeof Params>;
 
+function readJsonSafe(filePath: string): unknown {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
 function renderPackageManagerCall(_args: PackageManagerParams, theme: Theme) {
   return new ToolCallHeader({ toolName: "Detect Package Manager" }, theme);
 }
@@ -80,19 +88,17 @@ const packageManagerTool = defineTool({
       // Check packageManager field in package.json
       if (!declaredPm) {
         const pkgPath = path.join(searchDir, "package.json");
-        try {
-          if (fs.existsSync(pkgPath)) {
-            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-            if (typeof pkg.packageManager === "string") {
-              const match = pkg.packageManager.match(/^([^@]+)@?(.*)?$/);
-              if (match) {
-                declaredPm = match[1];
-                declaredVersion = match[2] || undefined;
-              }
+        if (fs.existsSync(pkgPath)) {
+          const pkg = readJsonSafe(pkgPath) as {
+            packageManager?: string;
+          } | null;
+          if (typeof pkg?.packageManager === "string") {
+            const match = pkg.packageManager.match(/^([^@]+)@?(.*)?$/);
+            if (match) {
+              declaredPm = match[1];
+              declaredVersion = match[2] || undefined;
             }
           }
-        } catch {
-          // Ignore parse errors
         }
       }
 

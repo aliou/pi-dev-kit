@@ -17,8 +17,8 @@ importers:
         version: 0.4.0(@earendil-works/pi-coding-agent@0.79.1(ws@8.19.0)(zod@3.25.76))(@earendil-works/pi-tui@0.79.1)
     devDependencies:
       '@aliou/biome-plugins':
-        specifier: ^0.17.0
-        version: 0.17.0(@biomejs/biome@2.6.4)
+        specifier: ^0.18.1
+        version: 0.18.1(@biomejs/biome@2.6.4)
       '@biomejs/biome':
         specifier: ^2.6.4
         version: 2.6.4
@@ -46,8 +46,8 @@ importers:
 
 packages:
 
-  '@aliou/biome-plugins@0.17.0':
-    resolution: {integrity: sha512-y87aE3x3fnvOWC99EjzXRdHqJQh8wtkrMbU9mlthIfX1FfFDL1euwWW0Y6Am/upW8XzNgR09s7v0EfcQ2AHzxw==}
+  '@aliou/biome-plugins@0.18.1':
+    resolution: {integrity: sha512-0TC0dxaK8lYV7Gig20kAN49R9FRn5emdhVy2X+24sbzJYNPb0vbY9ZJMgfFJkM5oZKd8u0a949JLb0TJZkrSOg==}
     peerDependencies:
       '@biomejs/biome': '>=2.6.0'
 
@@ -1172,7 +1172,7 @@ packages:
 
 snapshots:
 
-  '@aliou/biome-plugins@0.17.0(@biomejs/biome@2.6.4)':
+  '@aliou/biome-plugins@0.18.1(@biomejs/biome@2.6.4)':
     dependencies:
       '@biomejs/biome': 2.6.4
 

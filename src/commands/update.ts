@@ -8,8 +8,8 @@ async function fetchLatestVersion(): Promise<string | null> {
   try {
     const res = await fetch(NPM_REGISTRY_URL);
     if (!res.ok) return null;
-    const data = (await res.json()) as { version?: string };
-    return data.version ?? null;
+    const data = await res.json();
+    return (data as { version?: string }).version ?? null;
   } catch {
     return null;
   }
