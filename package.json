@@ -55,12 +55,6 @@
     "typescript": "^5.9.3",
     "@aliou/biome-plugins": "^0.18.1"
   },
-  "pnpm": {
-    "overrides": {
-      "@earendil-works/pi-ai": "$@earendil-works/pi-coding-agent",
-      "@earendil-works/pi-tui": "$@earendil-works/pi-coding-agent"
-    }
-  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "biome check",
@@ -70,7 +64,7 @@
     "version": "changeset version",
     "release": "pnpm changeset publish"
   },
-  "packageManager": "pnpm@10.26.1",
+  "packageManager": "pnpm@11.27.0",
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
       "optional": true
