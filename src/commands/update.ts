@@ -103,6 +103,7 @@ For extension APIs, verify:
 - Hook return shapes match current Pi docs: \`input\` returns \`{ action: "continue" | "transform" | "handled", ... }\`; \`before_agent_start\` returns \`{ systemPrompt }\`; \`tool_result\` returns result patches.
 - Session replacement uses \`withSession\` after \`ctx.newSession()\`, \`ctx.fork()\`, or \`ctx.switchSession()\`; do not reuse captured old \`pi\`, command \`ctx\`, or \`ctx.sessionManager\`.
 - Reload command handlers treat \`await ctx.reload(); return;\` as terminal.
+- Deferred work (timers, socket callbacks, un-awaited promises) does not touch \`pi\` or \`ctx\` after \`session_shutdown\`: after a reload or session replacement every getter and \`pi\` action, including \`pi.events.emit()\`, throws a stale-context error, and Pi has no \`unhandledRejection\` handler to catch it. Close long-lived resources in \`session_shutdown\`, guard continuations with a flag set there, and drop stale-context errors in fire-and-forget \`catch\` handlers.
 - Fire-and-forget UI methods do not need \`ctx.hasUI\`; dialog methods that gate behavior do.
 - Providers use current \`pi.registerProvider(name, config)\`, \`name\`, \`authHeader\`, OAuth, per-model \`baseUrl\`, and \`thinkingLevelMap\` when relevant. Dynamic model discovery belongs in an async extension factory, not \`session_start\`.
 - Use SDK helpers for Pi paths instead of \`homedir()\` when helpers exist.

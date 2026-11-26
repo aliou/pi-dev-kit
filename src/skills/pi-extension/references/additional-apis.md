@@ -115,6 +115,43 @@ async execute() {
 }
 ```
 
+## Deferred Work and Stale Contexts
+
+On `/reload`, `/new`, `/resume`, `/fork`, and their `ctx` equivalents, Pi invalidates the old extension instance. From then on every `ctx` getter and every `pi` action, including `pi.on()`, `pi.events.on()`, and `pi.events.emit()`, throws `This extension ctx is stale after session replacement or reload...`. Pi installs no `unhandledRejection` handler, so that error escaping a timer, socket callback, or un-awaited promise kills the whole Pi process.
+
+- Do not own sockets, timers, watchers, or child processes that outlive the session. Create them in `session_start` and close them in `session_shutdown`; the replacement instance's `session_start` creates fresh ones.
+- Set a flag in `session_shutdown`, which runs before invalidation, and check it before deferred work touches `pi` or `ctx`.
+- End fire-and-forget chains with a `catch` that drops stale-context errors and reports the rest; never rethrow from it.
+- Keep work queued with `setImmediate` or `setTimeout` free of `pi` and `ctx`, or behind the flag.
+- The unsubscribe function returned by `pi.events.on()` does not throw and is safe to call in `session_shutdown`.
+
+```typescript
+function isStaleCtxError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith("This extension ctx is stale");
+}
+
+export default function (pi: ExtensionAPI) {
+  let invalidated = false;
+
+  pi.on("session_start", (_event, ctx) => {
+    invalidated = false;
+    refreshCatalog(ctx.signal)
+      .then((catalog) => {
+        if (invalidated) return;
+        pi.events.emit("my-domain:catalog:updated", catalog);
+      })
+      .catch((error) => {
+        if (invalidated || isStaleCtxError(error)) return;
+        ctx.ui.notify(`Catalog refresh failed: ${String(error)}`, "error");
+      });
+  });
+
+  pi.on("session_shutdown", () => {
+    invalidated = true;
+  });
+}
+```
+
 ## Sending Messages
 
 ### `pi.sendUserMessage(content, options?)`
@@ -385,6 +422,7 @@ Common helpers exported from the main package include:
 
 - [ ] Session replacement code uses `withSession` for post-switch work.
 - [ ] Reload handlers return immediately after `await ctx.reload()`.
+- [ ] Deferred work stops at `session_shutdown` and drops stale-context errors.
 - [ ] `pi.exec()` is used instead of `child_process`.
 - [ ] System prompt changes return `{ systemPrompt }` from `before_agent_start`.
 - [ ] `promptGuidelines` bullets name exact tools.

@@ -82,7 +82,7 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 | `references/modes.md` | Interactive/RPC/JSON/Print behavior and fallback patterns. |
 | `references/messages.md` | `sendMessage`, `registerMessageRenderer`, notification choices. |
 | `references/state.md` | Reconstructible state via tool result `details`, `appendEntry` usage. |
-| `references/additional-apis.md` | Shortcuts, flags, exec, session control, reload, UI customization. |
+| `references/additional-apis.md` | Shortcuts, flags, exec, session control, reload, stale contexts in deferred work, UI customization. |
 | `references/publish.md` | npm publishing, changesets, GitHub Actions, pre-publish checklist. |
 | `references/testing.md` | Local testing, type checking, hook tests, core-unit testing. |
 | `references/documentation.md` | README and changelog guidance. |
@@ -124,7 +124,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 22. File-mutating tools must normalize leading `@` paths and use `withFileMutationQueue()` for the full read-modify-write window.
 23. Large output tools must truncate output, report truncation, and save full output to a temp file.
 24. Store branch-aware tool state in tool result `details` and reconstruct from `ctx.sessionManager.getBranch()`.
-25. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`.
+25. After `ctx.newSession()`, `ctx.fork()`, or `ctx.switchSession()`, do post-switch work only in `withSession`. Deferred work (timers, sockets, un-awaited promises) checks a flag set in `session_shutdown` and drops stale-context errors: Pi has no `unhandledRejection` handler, so one escaping kills the process.
 26. Treat `await ctx.reload(); return;` as terminal in a command handler.
 27. Provider dynamic model discovery belongs in an async extension factory, not `session_start`.
 28. Use SDK helpers for Pi paths instead of `homedir()` when helpers exist.
@@ -149,6 +149,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 - [ ] Custom UI has RPC/print fallback and explicit sentinels.
 - [ ] Providers use current provider/model fields (`name`, `authHeader`, `thinkingLevelMap`, OAuth where needed).
 - [ ] State is reconstructible across reload/fork/compaction.
+- [ ] Sockets, timers, and child processes close in `session_shutdown`; deferred work cannot touch a stale `pi` or `ctx`.
 - [ ] No `child_process`, no `homedir()` for Pi paths, no `.js` import suffixes, no `@sinclair/typebox`.
 - [ ] `tsconfig.json` includes both `src/` and `extensions/`.
 - [ ] README documents setup, tools, commands, providers, env vars, and limitations.
