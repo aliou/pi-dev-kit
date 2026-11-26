@@ -1,22 +1,17 @@
 # pi-dev-kit
 
-Public Pi extension providing tools and prompts for building, maintaining, and updating Pi extensions.
+Public Pi package (`@aliou/pi-dev-kit` on npm) with tools, an update command, and the `pi-extension` skill that other agents follow to build Pi extensions. Wrong guidance here propagates into every extension built with it.
 
-## Stack
+## Commands
 
-- TypeScript (strict mode), pnpm 10.26.1, Biome, Changesets
+- Run `pnpm typecheck` and `pnpm lint`; the husky pre-commit hook runs both.
 
-## Scripts
+## Conventions
 
-- `pnpm typecheck`, `pnpm lint`, `pnpm format`, `pnpm changeset`
-
-## Structure
-
-- `src/tools/` - tool impls (changelog, docs, package-manager, version)
-- `src/commands/` - slash commands (extensions:update)
-- `src/skills/` - dev guidance (pi-extension skill with references)
-- `src/prompts/` - templates
+- Every change to shipped content (`src/`, including skills and prompts) gets a patch changeset in `.changeset/`, written by hand.
+- Verify skill guidance against the installed Pi docs and changelog or a sibling extension's source before writing it.
+- When changing the `pi-extension` skill, check whether `src/commands/update.ts` repeats the same guidance and update both.
 
 ## Deviations
 
-This extension uses the legacy single-directory pattern (`src/tools/`, `src/commands/`) instead of the multi-extension pattern (`extensions/`). It has no config and no sub-extensions, so the overhead of the event bus and nested config is not justified. New extensions should default to the multi-extension pattern documented in the pi-extension skill.
+This package uses the single-directory pattern (`src/tools/`, `src/commands/`) instead of the multi-extension pattern (`extensions/`). It has no config and no sub-extensions, so the event bus and nested config are not justified. New extensions should default to the multi-extension pattern documented in the pi-extension skill.
