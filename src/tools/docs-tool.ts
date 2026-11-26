@@ -7,14 +7,13 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { defineTool, keyHint } from "@earendil-works/pi-coding-agent";
+import { obj } from "@earendil-works/pi-schema";
 import { Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 import { findPiInstallation } from "./utils";
 
-const DocsParamsSchema = Type.Object({});
-type DocsParams = Static<typeof DocsParamsSchema>;
+const DocsParamsSchema = obj({});
 
-function renderDocsCall(_args: DocsParams, theme: Theme) {
+function renderDocsCall(theme: Theme) {
   return new ToolCallHeader({ toolName: "Pi Docs" }, theme);
 }
 
@@ -111,8 +110,8 @@ const docsTool = defineTool({
     };
   },
 
-  renderCall(args, theme) {
-    return renderDocsCall(args, theme);
+  renderCall(_args, theme) {
+    return renderDocsCall(theme);
   },
 
   renderResult(result, options, theme) {

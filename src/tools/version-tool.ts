@@ -5,13 +5,12 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { defineTool, VERSION } from "@earendil-works/pi-coding-agent";
+import { obj } from "@earendil-works/pi-schema";
 import { Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 
-const VersionParams = Type.Object({});
-type VersionParamsType = Static<typeof VersionParams>;
+const VersionParams = obj({});
 
-function renderVersionCall(_args: VersionParamsType, theme: Theme) {
+function renderVersionCall(theme: Theme) {
   return new ToolCallHeader({ toolName: "Pi Version" }, theme);
 }
 
@@ -43,8 +42,8 @@ const versionTool = defineTool({
     };
   },
 
-  renderCall(args, theme) {
-    return renderVersionCall(args, theme);
+  renderCall(_args, theme) {
+    return renderVersionCall(theme);
   },
 
   renderResult(result, options, theme) {

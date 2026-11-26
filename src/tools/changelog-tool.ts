@@ -7,8 +7,8 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { defineTool, keyHint, VERSION } from "@earendil-works/pi-coding-agent";
+import { compile, obj, opt, type Static, str } from "@earendil-works/pi-schema";
 import { Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 import { findPiInstallation } from "./utils";
 
 const GITHUB_RAW_CHANGELOG_URL =
@@ -18,9 +18,9 @@ const GITHUB_RAW_CHANGELOG_URL =
 // Params
 // ---------------------------------------------------------------------------
 
-const ChangelogParamsSchema = Type.Object({
-  version: Type.Optional(
-    Type.String({
+const ChangelogParamsSchema = obj({
+  version: opt(
+    str({
       description:
         "Specific version to get changelog for. If not provided, returns latest version.",
     }),
@@ -29,8 +29,9 @@ const ChangelogParamsSchema = Type.Object({
 
 type ChangelogParams = Static<typeof ChangelogParamsSchema>;
 
-const ChangelogVersionsParamsSchema = Type.Object({});
-type ChangelogVersionsParams = Static<typeof ChangelogVersionsParamsSchema>;
+const changelogParams = compile(ChangelogParamsSchema);
+
+const ChangelogVersionsParamsSchema = obj({});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -198,20 +199,18 @@ const COLLAPSED_LINES = 8;
 // Render helpers
 // ---------------------------------------------------------------------------
 
-function renderChangelogCall(args: ChangelogParams, theme: Theme) {
+function renderChangelogCall(args: unknown, theme: Theme) {
+  const version = changelogParams.check(args) ? args.version : undefined;
   return new ToolCallHeader(
     {
       toolName: "Pi Changelog",
-      mainArg: args.version ? `v${args.version}` : "latest",
+      mainArg: version ? `v${version}` : "latest",
     },
     theme,
   );
 }
 
-function renderChangelogVersionsCall(
-  _args: ChangelogVersionsParams,
-  theme: Theme,
-) {
+function renderChangelogVersionsCall(theme: Theme) {
   return new ToolCallHeader({ toolName: "Pi Changelog Versions" }, theme);
 }
 
@@ -267,7 +266,7 @@ pi_changelog // Get latest changelog`,
 
   async execute(
     _toolCallId,
-    params,
+    params: ChangelogParams,
     _signal,
     _onUpdate,
     _ctx,
@@ -416,8 +415,8 @@ const changelogVersionsTool = defineTool({
     };
   },
 
-  renderCall(args, theme) {
-    return renderChangelogVersionsCall(args, theme);
+  renderCall(_args, theme) {
+    return renderChangelogVersionsCall(theme);
   },
 
   renderResult(result, options, theme) {

@@ -7,11 +7,10 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { defineTool } from "@earendil-works/pi-coding-agent";
+import { obj } from "@earendil-works/pi-schema";
 import { Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 
-const Params = Type.Object({});
-type PackageManagerParams = Static<typeof Params>;
+const Params = obj({});
 
 function readJsonSafe(filePath: string): unknown {
   try {
@@ -21,7 +20,7 @@ function readJsonSafe(filePath: string): unknown {
   }
 }
 
-function renderPackageManagerCall(_args: PackageManagerParams, theme: Theme) {
+function renderPackageManagerCall(theme: Theme) {
   return new ToolCallHeader({ toolName: "Detect Package Manager" }, theme);
 }
 
@@ -160,8 +159,8 @@ const packageManagerTool = defineTool({
     };
   },
 
-  renderCall(args, theme) {
-    return renderPackageManagerCall(args, theme);
+  renderCall(_args, theme) {
+    return renderPackageManagerCall(theme);
   },
 
   renderResult(result, options, theme) {
