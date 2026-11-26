@@ -24,7 +24,8 @@ Rules:
 
 - `render(width)` returns one string per line.
 - Each rendered line must fit within `width`.
-- Use `truncateToWidth()` or `wrapTextWithAnsi()` for long lines.
+- Treat lines returned by any `render()`, including `super.render()` and embedded components, as read-only. Built-in components such as `Container`, `Text`, and `Markdown` return the same cached array while nothing changed; copy before modifying (`const lines = [...super.render(width)]`) and return a new array when your output changes.
+- Use `truncateToWidth()` from `@aliou/pi-utils-ui` or `wrapTextWithAnsi()` for long lines.
 - Implement `invalidate()` and clear cached themed output.
 - Use `matchesKey()` for key handling.
 
@@ -171,7 +172,8 @@ Common IDs include `Key.enter`, `Key.escape`, `Key.tab`, `Key.up`, `Key.down`, `
 Rendered lines must not exceed the provided width.
 
 ```typescript
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { truncateToWidth } from "@aliou/pi-utils-ui";
+import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 render(width: number): string[] {
   return wrapTextWithAnsi(this.theme.fg("accent", this.text), width);
@@ -181,7 +183,7 @@ render(width: number): string[] {
 Use:
 
 - `visibleWidth(str)` to measure display width without ANSI codes.
-- `truncateToWidth(str, width, ellipsis?)` for single-line truncation.
+- `truncateToWidth(str, width, ellipsis?, pad?)` from `@aliou/pi-utils-ui` for single-line truncation. Do not import pi-tui's `truncateToWidth`: it injects reset escapes that break the caller's styling and mis-parses non-SGR escape sequences.
 - `wrapTextWithAnsi(str, width)` for wrapping styled text.
 
 ## Theming

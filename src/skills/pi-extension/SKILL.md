@@ -115,7 +115,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 13. Handle `renderResult` partial state first with a stable tool-scoped message.
 14. Detect tool errors by missing expected `details` fields or `context.isError`; thrown tools receive `details: {}`.
 15. Use `ToolCallHeader`, `ToolBody`, and conditional `ToolFooter` for tool rendering.
-16. Use existing TUI components before creating custom components.
+16. Use existing TUI components before creating custom components. Treat lines from any `render()` as read-only and copy before modifying them. Truncate with `truncateToWidth` from `@aliou/pi-utils-ui`, not pi-tui.
 17. `ctx.ui.custom()` needs RPC/print fallback. Interactive close paths must not rely on `done(undefined)`. Inline components raised by the agent that wait for an answer pass `blocked: { kind, message }`; do not report dialogs the user opened themselves.
 18. Keybinding hints use the `keyHint()`/`keyText()` injected into the tool render context and message/entry render options, never an import: an import can resolve to another pi-coding-agent copy that does not see pi's keybindings.
 19. Dialog methods that gate behavior need `ctx.hasUI` checks; fire-and-forget UI methods do not.

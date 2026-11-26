@@ -96,6 +96,8 @@ For rendering and TUI, verify:
 - Use the \`keyHint()\`/\`keyText()\` injected into the tool render context and message/entry render options for key hints, for example \`context.keyHint("app.tools.expand", "to expand")\`. Never import \`keyHint\`/\`keyText\`: the import can resolve to the extension's own pi-coding-agent copy, which does not see pi's keybindings, and the hint renders without the key.
 - Use \`Container\`, \`Text\`, \`Markdown\`, \`SelectList\`, \`SettingsList\`, \`BorderedLoader\`, and \`DynamicBorder\` before writing custom UI.
 - Custom components implement \`render(width): string[]\`, \`handleInput(data)\`, and \`invalidate()\`; use \`matchesKey\` and keep rendered lines within width.
+- Since pi 1.6.0, lines returned by \`render()\` are read-only and built-in components return cached arrays. Code that modifies \`super.render()\` or an embedded component's output in place must copy it first.
+- Truncate with \`truncateToWidth\` from \`@aliou/pi-utils-ui\`, not \`@earendil-works/pi-tui\`.
 - \`ctx.ui.custom()\` has RPC/print fallback and interactive close paths use explicit sentinels such as \`null\` or \`"closed"\`, not \`done(undefined)\`.
 - Inline \`ctx.ui.custom()\` components that wait for an answer pass \`blocked: { kind: "question" | "permission" | "auth", message }\` so terminals with program status (OSC 7501) show pi as blocked while the component is visible. Only for agent-initiated prompts, such as permission gates; not for dialogs the user opened themselves. Overlays ignore the option; loaders and informational viewers do not need it.
 
