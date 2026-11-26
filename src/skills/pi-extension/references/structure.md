@@ -332,6 +332,15 @@ export type {
 
 After `await configLoader.load()` (idempotent), use `configLoader.getConfig()` for resolved config and `getRawConfig(scope)` for a scope's raw overrides.
 
+### Project trust
+
+Pi decides project trust after extension factories run, so a factory cannot know whether the project's `.pi/extensions/<name>.json` may be read. `load()` reads defaults and global config only. Call `bindProjectConfig(pi, configLoader)` right after it, before registering any other `session_start` handler: it loads trusted project config from `ctx.cwd` once `ctx.isProjectTrusted()` is known and ignores untrusted project config without reading or writing it.
+
+- Read config when a handler runs (`configLoader.getConfig()` inside the hook, command, or tool), not as a snapshot taken in the factory, which misses project config.
+- Register hooks and commands unconditionally and check config when they run, instead of registering them only when a factory-time setting is on.
+- Pi loads each `pi.extensions` entry point with its own module instances, so every entry point that imports the loader calls `load()` and `bindProjectConfig()` itself.
+- Untrusted projects keep the Local settings tab visible but read-only; `/trust` takes effect after restarting Pi.
+
 Generate `schema.json` from config types:
 
 ```bash
@@ -531,6 +540,7 @@ The main extension owns config loading, settings, and the feature discovery even
 ```typescript
 // extensions/my-domain/index.ts
 
+import { bindProjectConfig } from "@aliou/pi-utils-settings";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { configLoader, drainMigrationMessages } from "../../src/config";
 import {
@@ -545,6 +555,7 @@ import { registerSessionStartHook } from "./hooks";
 
 export default async function myDomainExtension(pi: ExtensionAPI) {
   await configLoader.load();
+  bindProjectConfig(pi, configLoader);
 
   const loadedFeatures = new Set<MyFeatureId>();
 
@@ -583,6 +594,7 @@ Sub-extensions register with the main extension and react to config updates.
 ```typescript
 // extensions/feature-a/index.ts
 
+import { bindProjectConfig } from "@aliou/pi-utils-settings";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { configLoader } from "../../src/config";
 import {
@@ -595,8 +607,9 @@ import {
 
 export default async function featureAExtension(pi: ExtensionAPI) {
   await configLoader.load();
+  bindProjectConfig(pi, configLoader);
 
-  let enabled = configLoader.getConfig().featureA.enabled;
+  let enabled = false;
 
   function registerFeature(): void {
     pi.events.emit(MY_DOMAIN_FEATURE_REGISTER_EVENT, createFeatureRegisterPayload("featureA"));
@@ -611,13 +624,14 @@ export default async function featureAExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", (_event, ctx) => {
+    enabled = configLoader.getConfig().featureA.enabled;
     if (!enabled) return;
     // Register tools, providers, etc.
   });
 }
 ```
 
-Sub-extensions call `await configLoader.load()` themselves (idempotent) and register their feature ID both at init time and in response to the request event.
+Sub-extensions call `await configLoader.load()` and `bindProjectConfig()` themselves and register their feature ID both at init time and in response to the request event.
 
 ### Acceptable Deviations
 
@@ -701,6 +715,7 @@ Do not publish packages that depend on private workspace packages.
 - [ ] `files` lists `CHANGELOG.md`; no `catalog:` or `workspace:` versions in a published `package.json`.
 - [ ] pnpm settings live in `pnpm-workspace.yaml`, with catalog-backed Pi overrides and `allowBuilds`.
 - [ ] `biome.json` extends `@aliou/biome-plugins/configs/pi-coding-agent-extension`.
+- [ ] Every entry point that loads config calls `bindProjectConfig()` before its other `session_start` handlers, and handlers read config when they run.
 - [ ] Settings use `registerSettingsCommand` when configurable.
 - [ ] API-key-missing path notifies and disables affected features.
 - [ ] No `.js` suffixes in TypeScript imports.

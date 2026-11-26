@@ -111,6 +111,7 @@ For project structure and package docs, verify:
 - Prefer one extension entry point per domain directory under \`extensions/\`. The main extension owns config loading, settings, and feature discovery. Sub-extensions register via the event bus.
 - \`src/\` is Pi-agnostic: no imports from \`@earendil-works/pi-*\`. All Pi registration code lives under \`extensions/\`.
 - Config in \`src/config/\` with \`types.ts\`, \`defaults.ts\`, \`loader.ts\`, and \`migration/\`. Use per-feature nested config sections.
+- Every entry point that loads config with \`@aliou/pi-utils-settings\` calls \`bindProjectConfig(pi, configLoader)\` right after \`load()\`, before its other \`session_start\` handlers, so untrusted project config is never read. Hooks and commands read \`configLoader.getConfig()\` when they run instead of a factory-time snapshot.
 - Event bus constants and payload types in \`src/events.ts\`.
 - Keep domain logic in Pi-free core modules and extensions as thin wrappers.
 - No \`.js\` suffixes in TypeScript imports.

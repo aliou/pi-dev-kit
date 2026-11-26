@@ -104,7 +104,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 2. `src/` is Pi-agnostic in new extensions: no imports from `@earendil-works/pi-*`. All Pi registration code lives under `extensions/`.
 3. One Pi extension entry point per domain directory under `extensions/`. The main extension owns config, settings, and feature discovery.
 4. Use the event bus (`src/events.ts`) for main-sub-extension communication: `domain:feature:request`, `domain:feature:register`, `domain:config:updated`.
-5. Config in `src/config/` with `types.ts`, `defaults.ts`, `loader.ts`, and `migration/`. Use per-feature nested sections.
+5. Config in `src/config/` with `types.ts`, `defaults.ts`, `loader.ts`, and `migration/`. Use per-feature nested sections. Call `bindProjectConfig(pi, configLoader)` right after `load()` so project config is read only once Pi trusts the project, and read config when handlers run, not in the factory.
 6. Define `type MyToolParams = Static<typeof parameters>` for helper/action APIs, but prefer inference inside `defineTool` callbacks.
 7. Tool execute signature is `(toolCallId, params, signal, onUpdate, ctx)`. Signal comes before `onUpdate`.
 8. Always call `onUpdate?.(...)` with optional chaining.
@@ -138,6 +138,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 - [ ] `package.json` lists extension entry points under `extensions/` and package resources.
 - [ ] `src/` has no `@earendil-works/pi-*` imports.
 - [ ] Config in `src/config/` with `types.ts`, `defaults.ts`, `loader.ts`, `migration/`.
+- [ ] Each entry point that loads config calls `bindProjectConfig()`; handlers read config at run time.
 - [ ] Event bus in `src/events.ts` with domain-prefixed event names.
 - [ ] Main extension owns config loading, settings, and feature discovery.
 - [ ] Sub-extensions register via event bus.
