@@ -13,6 +13,18 @@ pi
 
 Pi reads the `pi.extensions` paths from `package.json` and loads the entry points.
 
+A running Pi keeps the extension code it loaded at startup; restart it or run `/reload` after editing.
+
+### Smoke-test loading
+
+Load one entry point with every other extension disabled, so a failure is attributable to it:
+
+```bash
+pi -ne -e ./extensions/my-domain/index.ts --no-session -p "reply with ok"
+```
+
+Load failures print `Failed to load extension` on stderr before the prompt runs. The reply itself needs a model that works without the disabled extensions; pass `--model` when the default comes from an extension provider. Print mode skips interactive UI paths, so it does not exercise renderers or `ctx.ui.custom()`.
+
 ## Type Checking
 
 Run TypeScript type checking to catch errors without building:
@@ -171,13 +183,12 @@ Extensions use vitest. Add to `package.json`:
 }
 ```
 
+## Lifecycle Regression Tests
+
+Stale-context and session-replacement bugs only show up against Pi's real guards. Drive the extension factory through the exported `createExtensionRuntime()`, `createEventBus()`, and `ExtensionRunner`, stub only the network and config, invalidate the runtime while deferred work is in flight, and assert that no `unhandledRejection` fired and the runner reported no errors. `extensions/aperture/stale-ctx.test.ts` in `github.com/aliou/pi-ts-aperture` is a complete example.
+
+Keep tests next to the code they cover (`extensions/<name>/*.test.ts`, `src/**/*.test.ts`) and exclude them from `files` in `package.json`.
+
 ## Debugging
 
-Extension errors are logged to the pi log file. Check the output for stack traces:
-
-```bash
-# View pi logs
-pi --log-level debug
-```
-
-If an extension fails to load, pi logs the error and continues without it.
+If an extension fails to load, Pi reports the error and continues without it: in the chat in interactive mode, on stderr in print, JSON, and RPC modes.

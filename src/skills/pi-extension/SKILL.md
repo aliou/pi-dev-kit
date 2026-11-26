@@ -84,7 +84,7 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 | `references/state.md` | Reconstructible state via tool result `details`, `appendEntry` usage. |
 | `references/additional-apis.md` | Shortcuts, flags, exec, session control, reload, stale contexts in deferred work, UI customization. |
 | `references/publish.md` | npm publishing, changesets, GitHub Actions, pre-publish checklist. |
-| `references/testing.md` | Local testing, type checking, hook tests, core-unit testing. |
+| `references/testing.md` | Local testing, smoke-loading an entry point, type checking, hook tests, core-unit testing, lifecycle regression tests. |
 | `references/documentation.md` | README and changelog guidance. |
 
 ## Reference Extensions
