@@ -89,12 +89,14 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 
 ## Reference Extensions
 
-- `pi-extension-template` (`/Users/alioudiallo/code/src/pi.dev/pi-extension-template/`): Multi-extension pattern, event bus, nested config, autocomplete provider, settings.
-- `pi-linkup` (`/Users/alioudiallo/code/src/pi.dev/pi-linkup/`): API tools, prompt metadata, output truncation, API-key gating.
-- `pi-synthetic` (`/Users/alioudiallo/code/src/pi.dev/pi-synthetic/`): Provider + tools, command UI, API-key gating.
-- `pi-processes` (`/Users/alioudiallo/code/src/pi.dev/pi-processes/`): Multi-action process tool, prompt metadata plus orchestration guidance, unit-tested core manager.
-- `pi-linear` (`/Users/alioudiallo/code/src/pi.dev/pi-linear/`): Multi-action tool, settings UI, auth wizard, config migrations.
-- `pi-obsidian` (`/Users/alioudiallo/code/src/pi.dev/pi-obsidian/`): CLI wrapper with separate core package and `pi.exec()` usage.
+Read these on GitHub (or a local clone) when you need a working example of a pattern:
+
+- `github.com/aliou/pi-extension-template`: Multi-extension pattern, event bus, nested config, autocomplete provider, settings, publish workflow.
+- `github.com/aliou/pi-linkup`: API tools, prompt metadata, output truncation, API-key gating.
+- `github.com/aliou/pi-synthetic`: Provider + tools, command UI, API-key gating, project-trusted config.
+- `github.com/aliou/pi-processes`: Multi-action process tool, prompt metadata plus orchestration guidance, unit-tested core manager.
+- `github.com/aliou/pi-toolchain`: Config read at hook time, project-trusted config, `tool_call` hooks.
+- `github.com/aliou/pi-ts-aperture`: Stale-ctx guards for deferred work, integration tests through pi's real `ExtensionRunner`.
 
 ## Critical Rules
 
