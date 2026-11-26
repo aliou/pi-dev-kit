@@ -15,7 +15,7 @@ A publishable package needs Pi metadata and discoverability fields.
   "private": false,
   "keywords": ["pi-package", "pi-extension", "pi"],
   "publishConfig": { "access": "public" },
-  "files": ["src", "extensions", "schema.json", "README.md", "!src/**/*.test.ts", "!extensions/**/*.test.ts"],
+  "files": ["src", "extensions", "schema.json", "CHANGELOG.md", "README.md", "!src/**/*.test.ts", "!extensions/**/*.test.ts"],
   "pi": {
     "extensions": ["./extensions/my-domain/index.ts", "./extensions/feature-a/index.ts"]
   },
@@ -32,7 +32,9 @@ A publishable package needs Pi metadata and discoverability fields.
 
 Pi core packages imported at runtime belong in optional `peerDependencies`. Use `"*"` by default. Only use a minimum range such as `">=0.75.0"` when code requires an API introduced after Pi 0.74.0, and set the minimum to the introducing version. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
 
-The `files` array must include both `src` and `extensions` directories, plus `schema.json`.
+The `files` array must include the `src` and `extensions` directories, `schema.json`, and `CHANGELOG.md`. npm adds `README.md` on its own but not `CHANGELOG.md`, so without the entry Pi has no update notes to show.
+
+Do not use `catalog:` or `workspace:` versions in the published `package.json`: git installs resolve dependencies with npm.
 
 ## Installation Specs
 
@@ -141,7 +143,8 @@ Run the repo's public-dependency check when available, for example `pnpm run che
 - [ ] `private` is `false`.
 - [ ] `publishConfig.access` is `public` for scoped public packages.
 - [ ] `keywords` includes `pi-package`.
-- [ ] `files` lists only shipped files users need.
+- [ ] `files` lists only shipped files users need, including `CHANGELOG.md`.
+- [ ] No `catalog:` or `workspace:` versions in `package.json`.
 - [ ] `pi.extensions` paths point to `./extensions/...` entry points.
 - [ ] `pi.skills`, `pi.prompts`, and `pi.themes` paths are correct.
 - [ ] Demo `pi.video` or `pi.image` metadata is present when available.

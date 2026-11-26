@@ -73,7 +73,7 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 
 | File | Content |
 |---|---|
-| `references/structure.md` | Multi-extension layout, package.json, tsconfig, config split, event bus, entry points, API-key pattern. |
+| `references/structure.md` | Multi-extension layout, package.json, pnpm-workspace.yaml, tsconfig, Biome config, config split, event bus, entry points, API-key pattern. |
 | `references/tools.md` | `defineTool`, schemas, execute signature, prompt metadata, rendering, truncation, concurrency. |
 | `references/commands.md` | Slash commands, argument completion, session methods, rich UI fallback. |
 | `references/hooks.md` | Event lifecycle, blocking/cancelling, input transforms, system prompt hooks, bash hooks. |
@@ -131,6 +131,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 29. No `.js` extensions in TypeScript imports.
 30. Pi core packages you import belong in optional `peerDependencies`; use `"*"` by default, or `">=x.y.z"` only when code needs an API introduced after Pi 0.74.0. Keep exact target versions in `devDependencies`.
 31. `tsconfig.json` must include both `src/**/*.ts` and `extensions/**/*.ts`.
+32. Published `package.json` lists `CHANGELOG.md` in `files` and uses no `catalog:` or `workspace:` versions. pnpm settings and Pi version overrides live in `pnpm-workspace.yaml`.
 
 ## Completion Checklist
 

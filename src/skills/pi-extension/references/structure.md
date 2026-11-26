@@ -31,11 +31,13 @@ my-extension/
       completion.ts           Helper functions
 
   package.json
+  pnpm-workspace.yaml
   tsconfig.json
   biome.json
-  shell.nix
+  flake.nix
   .changeset/config.json
   schema.json
+  CHANGELOG.md
   README.md
 ```
 
@@ -84,7 +86,7 @@ Pi core packages are `@earendil-works/*`.
   "publishConfig": {
     "access": "public"
   },
-  "files": ["src", "extensions", "schema.json", "README.md", "!src/**/*.test.ts", "!extensions/**/*.test.ts"],
+  "files": ["src", "extensions", "schema.json", "CHANGELOG.md", "README.md", "!src/**/*.test.ts", "!extensions/**/*.test.ts"],
   "pi": {
     "extensions": [
       "./extensions/my-domain/index.ts",
@@ -96,8 +98,8 @@ Pi core packages are `@earendil-works/*`.
     "video": "https://example.com/demo.mp4"
   },
   "dependencies": {
-    "@aliou/pi-utils-settings": "^0.17.0",
-    "@aliou/pi-utils-ui": "^0.4.0"
+    "@aliou/pi-utils-settings": "^0.24.0",
+    "@aliou/pi-utils-ui": "^0.6.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
@@ -112,8 +114,8 @@ Pi core packages are `@earendil-works/*`.
     "typebox": { "optional": true }
   },
   "devDependencies": {
-    "@aliou/biome-plugins": "^0.10.0",
-    "@biomejs/biome": "^2.5.0",
+    "@aliou/biome-plugins": "^0.18.1",
+    "@biomejs/biome": "^2.6.4",
     "@changesets/cli": "^2.31.0",
     "@earendil-works/pi-ai": "CURRENT_VERSION",
     "@earendil-works/pi-coding-agent": "CURRENT_VERSION",
@@ -138,19 +140,17 @@ Pi core packages are `@earendil-works/*`.
     "version": "changeset version",
     "release": "pnpm changeset publish"
   },
-  "pnpm": {
-    "overrides": {
-      "@earendil-works/pi-ai": "$@earendil-works/pi-coding-agent",
-      "@earendil-works/pi-tui": "$@earendil-works/pi-coding-agent"
-    }
-  },
-  "packageManager": "pnpm@10.26.1"
+  "packageManager": "pnpm@11.27.0"
 }
 ```
 
 Replace `CURRENT_VERSION` with the exact target Pi version for local type checking.
 
 Only include `pi` sub-fields you actually use. `skills`, `themes`, `prompts`, `video`, and `image` are optional.
+
+List `CHANGELOG.md` in `files`: npm does not add it to a package with a `files` whitelist, and Pi reads it from the installed package to show update notes.
+
+Do not use `catalog:` or `workspace:` versions in a published `package.json`. `pi install git:...` installs dependencies with npm, which cannot resolve pnpm-only protocols. The `pi-coding-agent-extension` Biome config rejects them.
 
 ### Dependency Rules
 
@@ -171,6 +171,33 @@ For any of these that you import:
 - Do not bundle them.
 
 Third-party runtime packages that Pi does not provide belong in `dependencies`. If bundling another Pi package's resources into your tarball, add it to `dependencies` and `bundledDependencies`, then reference resources through `node_modules/...` paths.
+
+## pnpm-workspace.yaml
+
+pnpm 11 reads its settings from `pnpm-workspace.yaml`, not from `package.json`.
+
+```yaml
+catalog:
+  "@earendil-works/pi-ai": CURRENT_VERSION
+  "@earendil-works/pi-tui": CURRENT_VERSION
+
+overrides:
+  "@earendil-works/pi-ai": "catalog:"
+  "@earendil-works/pi-tui": "catalog:"
+
+allowBuilds:
+  "@google/genai": false
+  protobufjs: false
+
+minimumReleaseAgeExclude:
+  - "@earendil-works/pi-ai@CURRENT_VERSION"
+  - "@earendil-works/pi-coding-agent@CURRENT_VERSION"
+  - "@earendil-works/pi-tui@CURRENT_VERSION"
+```
+
+- The overrides keep the transitive `pi-ai` and `pi-tui` on the same version as the `pi-coding-agent` dev dependency. Reference catalog entries with `catalog:`; the `$package` override syntax is deprecated.
+- `allowBuilds` must list every dependency with a build script as `true` or `false`, or install fails.
+- `minimumReleaseAgeExclude` lets install pick recently published Pi versions that pnpm's minimum release age would otherwise reject. Add the exact versions you bump to, including other freshly published Pi packages the install reports.
 
 ## tsconfig.json
 
@@ -204,45 +231,20 @@ The `include` must cover both `src/` and `extensions/`. The stricter options (`n
 
 ## biome.json
 
-Use Biome 2.x. If the project uses `@aliou/biome-plugins`, enable the Pi-relevant plugins.
+Use Biome 2.x with the shared config from `@aliou/biome-plugins`. It sets formatting, import sorting, and the Pi lint rules (for example no Node `child_process`, no pi-tui `truncateToWidth`, no pnpm-only protocols).
 
 ```json
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
-  "plugins": [
-    "./node_modules/@aliou/biome-plugins/plugins/no-inline-imports.grit",
-    "./node_modules/@aliou/biome-plugins/plugins/no-js-import-extension.grit",
-    "./node_modules/@aliou/biome-plugins/plugins/no-emojis.grit"
-  ],
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "extends": ["@aliou/biome-plugins/configs/pi-coding-agent-extension"],
   "files": {
-    "includes": ["**/*.ts", "**/*.json"],
+    "includes": ["**/*.ts", "**/*.json", "!schema.json"],
     "ignoreUnknown": true
-  },
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
-    }
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": true
-    }
-  },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2
   }
 }
 ```
+
+Match the `$schema` version to the installed Biome. Do not suppress a shared rule to get a change through; fix the code or leave the change out and report it.
 
 ## Config Pattern
 
@@ -673,7 +675,7 @@ extensions/my-extension/
   package.json
 ```
 
-Use workspace protocol only for local workspace packages.
+Use workspace protocol only for private packages that are not installed from npm or git.
 
 ```json
 {
@@ -696,6 +698,9 @@ Do not publish packages that depend on private workspace packages.
 - [ ] Sub-extensions register via event bus.
 - [ ] Pi core imports are optional peers with `"*"` unless a post-0.74.0 API requires a documented minimum range, and exact dev deps.
 - [ ] Third-party runtime packages are in `dependencies`.
+- [ ] `files` lists `CHANGELOG.md`; no `catalog:` or `workspace:` versions in a published `package.json`.
+- [ ] pnpm settings live in `pnpm-workspace.yaml`, with catalog-backed Pi overrides and `allowBuilds`.
+- [ ] `biome.json` extends `@aliou/biome-plugins/configs/pi-coding-agent-extension`.
 - [ ] Settings use `registerSettingsCommand` when configurable.
 - [ ] API-key-missing path notifies and disables affected features.
 - [ ] No `.js` suffixes in TypeScript imports.

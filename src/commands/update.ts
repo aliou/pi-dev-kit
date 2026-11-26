@@ -49,6 +49,8 @@ For distributed Pi packages:
 - Only use a minimum range such as \`">=0.75.0"\` when source code uses an API that the changelog/docs show was introduced after Pi 0.74.0. In that case, set the minimum to the exact version that introduced the required API.
 - Keep the same Pi core packages in \`devDependencies\` at the exact target version for local type checking.
 - Keep \`typebox\` 1.x. Do not use \`@sinclair/typebox\` in new code.
+- With pnpm, keep the transitive \`pi-ai\` and \`pi-tui\` on the target version through \`catalog:\` entries referenced from \`overrides\` in \`pnpm-workspace.yaml\`, not the deprecated \`$package\` override syntax. Bump the catalog with the dev dependencies, and add the target versions to \`minimumReleaseAgeExclude\` when install rejects them as too recent.
+- Never put \`catalog:\` or \`workspace:\` versions in a published \`package.json\`; git installs resolve dependencies with npm.
 
 Report current versions/namespaces vs target before planning code changes. If everything already matches and no code/docs best-practice updates are needed, stop.
 
