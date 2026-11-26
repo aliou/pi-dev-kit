@@ -99,19 +99,18 @@ Pi core packages are `@earendil-works/*`.
   },
   "dependencies": {
     "@aliou/pi-utils-settings": "^0.24.0",
-    "@aliou/pi-utils-ui": "^0.6.0"
+    "@aliou/pi-utils-ui": "^0.6.1",
+    "@earendil-works/pi-schema": "^CURRENT_VERSION"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-tui": "*",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "*"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": { "optional": true },
     "@earendil-works/pi-ai": { "optional": true },
-    "@earendil-works/pi-tui": { "optional": true },
-    "typebox": { "optional": true }
+    "@earendil-works/pi-tui": { "optional": true }
   },
   "devDependencies": {
     "@aliou/biome-plugins": "^0.18.1",
@@ -120,7 +119,6 @@ Pi core packages are `@earendil-works/*`.
     "@earendil-works/pi-ai": "CURRENT_VERSION",
     "@earendil-works/pi-coding-agent": "CURRENT_VERSION",
     "@earendil-works/pi-tui": "CURRENT_VERSION",
-    "typebox": "^1.0.0",
     "ts-json-schema-generator": "^2.9.0",
     "@types/node": "^25.9.0",
     "husky": "^9.1.7",
@@ -160,7 +158,6 @@ Pi provides these runtime packages to extensions:
 - `@earendil-works/pi-agent-core`
 - `@earendil-works/pi-ai`
 - `@earendil-works/pi-tui`
-- `typebox`
 
 For any of these that you import:
 
@@ -169,6 +166,8 @@ For any of these that you import:
 - Mark them `optional: true` in `peerDependenciesMeta`.
 - Put exact target versions in `devDependencies` for type checking.
 - Do not bundle them.
+
+`@earendil-works/pi-schema` is not on that list: Pi resolves it from the package's own `node_modules`, so it belongs in `dependencies`.
 
 Third-party runtime packages that Pi does not provide belong in `dependencies`. If bundling another Pi package's resources into your tarball, add it to `dependencies` and `bundledDependencies`, then reference resources through `node_modules/...` paths.
 
@@ -248,7 +247,7 @@ Match the `$schema` version to the installed Biome. Do not suppress a shared rul
 
 ## Config Pattern
 
-Use plain TypeScript interfaces with raw/resolved types in `src/config/types.ts`. Do not use TypeBox for config types. Use per-feature nested config sections for granular toggles.
+Use plain TypeScript interfaces with raw/resolved types in `src/config/types.ts`. Do not use schema builders for config types. Use per-feature nested config sections for granular toggles.
 
 ```typescript
 // src/config/types.ts

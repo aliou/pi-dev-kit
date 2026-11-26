@@ -19,8 +19,9 @@ Core packages provided by Pi at runtime:
 
 - `@earendil-works/pi-coding-agent` — extension API, types, tools, utilities.
 - `@earendil-works/pi-tui` — TUI components.
-- `@earendil-works/pi-ai` — AI utilities such as `StringEnum`.
-- `typebox` — TypeBox 1.x schemas. Do not use `@sinclair/typebox` in new code.
+- `@earendil-works/pi-ai` — AI utilities, model types, and transcript helpers.
+
+Tool parameter schemas use `@earendil-works/pi-schema`, which Pi does not provide to extensions: list it in `dependencies`.
 
 ## Standard Imports
 
@@ -34,9 +35,8 @@ import {
   truncateHead,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { compile, obj, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
 import { Container, Markdown, Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 ```
 
 If using the legacy namespace, replace `@earendil-works/*` with the matching `@mariozechner/*` package.
@@ -105,13 +105,13 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 3. One Pi extension entry point per domain directory under `extensions/`. The main extension owns config, settings, and feature discovery.
 4. Use the event bus (`src/events.ts`) for main-sub-extension communication: `domain:feature:request`, `domain:feature:register`, `domain:config:updated`.
 5. Config in `src/config/` with `types.ts`, `defaults.ts`, `loader.ts`, and `migration/`. Use per-feature nested sections. Call `bindProjectConfig(pi, configLoader)` right after `load()` so project config is read only once Pi trusts the project, and read config when handlers run, not in the factory.
-6. Define `type MyToolParams = Static<typeof parameters>` for helper/action APIs, but prefer inference inside `defineTool` callbacks.
+6. Build `parameters` with `@earendil-works/pi-schema` and define `type MyToolParams = Static<typeof parameters>` from it. Pi infers `execute` params as `unknown` for pi-schema schemas, so annotate `params: MyToolParams`; narrow `renderCall` args with `compile(parameters).check(args)`, since they can be partial.
 7. Tool execute signature is `(toolCallId, params, signal, onUpdate, ctx)`. Signal comes before `onUpdate`.
 8. Always call `onUpdate?.(...)` with optional chaining.
 9. Every tool needs `label`. Add `promptSnippet` when the tool should appear in Available tools.
 10. Every `promptGuidelines` bullet must name the exact tool. Do not say `this tool`.
-11. Use `StringEnum` from `pi-ai` for model-facing string enums. Do not use `Type.Union([Type.Literal(...)])` for enums. On pi >= 1.5.0, `Type.Optional(StringEnum(...))` loses its optionality in `Static` inference; keep enum params required or verify the inferred type.
-12. Tool parameter schemas are validated as JSON Schema: `Type.Refine()` refinements are not run, `Type.BigInt()`/`Type.Undefined()`/`Type.Void()` reject every argument, codecs do not decode, and `Format.Set()` formats are not checked. Check such constraints in `execute` and keep schemas plain JSON Schema.
+11. Use pi-schema's `oneOf([...])` for model-facing string enums; it produces a plain `enum` schema every provider accepts.
+12. Tool parameter schemas are plain JSON Schema validated by Pi. `default` is an annotation that validation never inserts; apply defaults and any constraint JSON Schema cannot express in `execute`.
 13. Handle `renderResult` partial state first with a stable tool-scoped message.
 14. Detect tool errors by missing expected `details` fields or `context.isError`; thrown tools receive `details: {}`.
 15. Use `ToolCallHeader`, `ToolBody`, and conditional `ToolFooter` for tool rendering.
@@ -150,7 +150,7 @@ Read these on GitHub (or a local clone) when you need a working example of a pat
 - [ ] Providers use current provider/model fields (`name`, `authHeader`, `thinkingLevelMap`, OAuth where needed).
 - [ ] State is reconstructible across reload/fork/compaction.
 - [ ] Sockets, timers, and child processes close in `session_shutdown`; deferred work cannot touch a stale `pi` or `ctx`.
-- [ ] No `child_process`, no `homedir()` for Pi paths, no `.js` import suffixes, no `@sinclair/typebox`.
+- [ ] No `child_process`, no `homedir()` for Pi paths, no `.js` import suffixes; schemas built only with `@earendil-works/pi-schema`.
 - [ ] `tsconfig.json` includes both `src/` and `extensions/`.
 - [ ] README documents setup, tools, commands, providers, env vars, and limitations.
 - [ ] Typecheck and lint pass.

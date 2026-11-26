@@ -40,7 +40,6 @@ Current Pi core packages are:
 - \`@earendil-works/pi-agent-core\`
 - \`@earendil-works/pi-ai\`
 - \`@earendil-works/pi-tui\`
-- \`typebox\`
 
 
 For distributed Pi packages:
@@ -48,7 +47,7 @@ For distributed Pi packages:
 - Use \`"*"\` for Pi core peer ranges by default, per Pi package docs.
 - Only use a minimum range such as \`">=0.75.0"\` when source code uses an API that the changelog/docs show was introduced after Pi 0.74.0. In that case, set the minimum to the exact version that introduced the required API.
 - Keep the same Pi core packages in \`devDependencies\` at the exact target version for local type checking.
-- Keep \`typebox\` 1.x. Do not use \`@sinclair/typebox\` in new code.
+- Tool parameter schemas use \`@earendil-works/pi-schema\`, which Pi does not provide to extensions: keep it in \`dependencies\` at the target version. Migrate any other schema builder to it and remove that builder from every dependency section.
 - With pnpm, keep the transitive \`pi-ai\` and \`pi-tui\` on the target version through \`catalog:\` entries referenced from \`overrides\` in \`pnpm-workspace.yaml\`, not the deprecated \`$package\` override syntax. Bump the catalog with the dev dependencies, and add the target versions to \`minimumReleaseAgeExclude\` when install rejects them as too recent.
 - Never put \`catalog:\` or \`workspace:\` versions in a published \`package.json\`; git installs resolve dependencies with npm.
 
@@ -74,14 +73,13 @@ Scan all source, tests, README, skills, prompts, and examples for Pi usage.
 
 For tools, verify:
 - Standalone tool objects use \`defineTool({...})\` from Pi so \`execute\`, \`renderCall\`, and \`renderResult\` infer params from \`parameters\`. Do not pass explicit generic arguments to \`defineTool\` and avoid callback parameter annotations unless TypeScript needs help.
-- Define \`type MyToolParams = Static<typeof parameters>\` for helper/action APIs, but prefer inference inside \`defineTool\` callbacks.
+- \`parameters\` is built with \`@earendil-works/pi-schema\` (\`obj\`, \`str\`, \`num\`, \`int\`, \`bool\`, \`arr\`, \`opt\`, \`oneOf\`, \`union\`), with \`type MyToolParams = Static<typeof parameters>\` from pi-schema. Pi types \`execute\` params as \`unknown\` for pi-schema schemas, so annotate \`params: MyToolParams\`; \`renderCall\` narrows its possibly partial \`args\` with \`compile(parameters).check(args)\`.
 - Every tool has \`label\`. Add \`promptSnippet\` when the tool should appear in Available tools.
 - Every \`promptGuidelines\` bullet names the exact tool, because Pi injects bullets flat into the global Guidelines section. Do not write "this tool".
 - Execute signature is \`(toolCallId, params, signal, onUpdate, ctx)\`; signal comes before \`onUpdate\`.
 - Use \`onUpdate?.(...)\` and forward \`signal\` to \`fetch\`, \`pi.exec\`, SDK clients, and long work.
-- Use \`StringEnum\` from \`@earendil-works/pi-ai\` for string enums; avoid \`Type.Union([Type.Literal(...)])\` for model-facing enums.
-- On pi >= 1.5.0, \`Type.Optional(StringEnum(...))\` loses its optionality in \`Static\` inference; keep enum params required or verify the inferred type.
-- Since pi 1.5.0, tool arguments are validated as JSON Schema: \`Type.Refine()\` refinements, \`Type.BigInt()\`/\`Type.Undefined()\`/\`Type.Void()\`, codecs, and \`Format.Set()\` formats no longer apply. Move such checks into \`execute\` and keep schemas plain JSON Schema.
+- Use pi-schema's \`oneOf([...])\` for model-facing string enums.
+- Tool arguments are validated as plain JSON Schema; \`default\` is never inserted. Apply defaults and constraints JSON Schema cannot express in \`execute\`.
 - Use \`prepareArguments(args)\` only for backward-compatible schema shims before validation.
 - Use \`executionMode: "sequential"\` for tools whose sibling calls mutate shared in-memory state or otherwise must not run concurrently.
 - File-mutating tools normalize leading \`@\` in paths and wrap the full read-modify-write window in \`withFileMutationQueue()\`.

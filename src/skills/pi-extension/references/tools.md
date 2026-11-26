@@ -17,9 +17,8 @@ import {
   truncateTail,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
-import { StringEnum } from "@earendil-works/pi-ai";
+import { compile, obj, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
 import { Container, Markdown, Text } from "@earendil-works/pi-tui";
-import { type Static, Type } from "typebox";
 ```
 
 Use legacy `@mariozechner/*` imports only when the target `@earendil-works/*` package is not available yet.
@@ -32,12 +31,12 @@ Tool extensions live under `extensions/` and are normal Pi extension entry point
 // extensions/tools/index.ts
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { defineTool } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
+import { num, obj, opt, type Static, str } from "@earendil-works/pi-schema";
 import { configLoader } from "../../src/config";
 
-const parameters = Type.Object({
-  query: Type.String({ description: "Search query" }),
-  limit: Type.Optional(Type.Number({ description: "Max results", default: 10 })),
+const parameters = obj({
+  query: str({ description: "Search query" }),
+  limit: opt(num({ description: "Max results", default: 10 })),
 });
 
 type MyToolParams = Static<typeof parameters>;
@@ -57,7 +56,7 @@ const myTool = defineTool({
   ],
   parameters,
 
-  async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<AgentToolResult<MyToolDetails>> {
+  async execute(_toolCallId, params: MyToolParams, signal, onUpdate, ctx): Promise<AgentToolResult<MyToolDetails>> {
     onUpdate?.({ content: [{ type: "text", text: "Searching..." }] });
     const results = await searchItems(params.query, { limit: params.limit, signal });
     return {
@@ -78,13 +77,15 @@ If the tool extension is a sub-extension, register with the main extension via t
 
 ## `defineTool()`
 
-Use `defineTool({...})` for standalone tool objects. It preserves parameter inference from the `parameters` field when the tool is stored in a variable or passed through arrays.
+Use `defineTool({...})` for standalone tool objects.
+
+Pi's `ToolDefinition` types cannot infer `params` from a pi-schema schema, so `execute` receives `unknown`. Declare `type MyToolParams = Static<typeof parameters>` from `@earendil-works/pi-schema` and annotate the `execute` parameter with it; Pi has already validated the arguments against `parameters` when `execute` runs.
 
 Rules:
 
 - Do not pass explicit generic arguments to `defineTool`.
-- Do not annotate callback parameters unless TypeScript needs help.
-- Add a `Static<typeof parameters>` alias for helper functions and action modules.
+- Annotate `params` in `execute` with the pi-schema `Static` alias, and use the same alias for helper functions and action modules.
+- Leave `renderCall` arguments `unknown` and narrow them with a compiled check (see `renderCall`).
 - If you want `renderResult` to know the `details` shape, annotate `execute` with `Promise<AgentToolResult<MyDetails>>`.
 
 ## Tool Definition Fields
@@ -94,7 +95,7 @@ Rules:
 | `name` | Yes | Snake_case identifier used in tool calls. |
 | `label` | Yes | Human-readable display name. |
 | `description` | Yes | Model-facing description. |
-| `parameters` | Yes | TypeBox 1.x schema from `typebox`. |
+| `parameters` | Yes | JSON Schema built with `@earendil-works/pi-schema`. |
 | `execute` | Yes | `(toolCallId, params, signal, onUpdate, ctx)`. |
 | `promptSnippet` | No | One-line entry in Available tools. Custom tools are omitted there when absent. |
 | `promptGuidelines` | No | Raw bullets appended to the global Guidelines section. Each bullet must name the tool. |
@@ -148,24 +149,27 @@ When a tool throws, Pi creates an error result with `details: {}` and the error 
 
 ## Parameters
 
-Use TypeBox 1.x from `typebox`. Always add useful descriptions.
+Build schemas with `@earendil-works/pi-schema`. Its builders return plain JSON Schema typed with the values they accept, and Pi validates tool arguments with the same library. Always add useful descriptions.
 
 ```typescript
-const parameters = Type.Object({
-  path: Type.String({ description: "File path" }),
-  includeHidden: Type.Optional(Type.Boolean({ description: "Include hidden files", default: false })),
-  sort: Type.Optional(StringEnum(["created", "updated", "relevance"] as const, {
-    description: "Sort order",
-  })),
-  tags: Type.Optional(Type.Array(Type.String({ description: "Tag" }))),
+import { arr, bool, obj, oneOf, opt, type Static, str } from "@earendil-works/pi-schema";
+
+const parameters = obj({
+  path: str({ description: "File path" }),
+  includeHidden: opt(bool({ description: "Include hidden files", default: false })),
+  sort: opt(oneOf(["created", "updated", "relevance"], { description: "Sort order" })),
+  tags: opt(arr(str({ description: "Tag" }))),
 });
+
+type ListParams = Static<typeof parameters>;
 ```
 
-Use `StringEnum` from `pi-ai` for model-facing string enums. Avoid `Type.Union([Type.Literal(...)])`; it is not compatible with all providers.
+- Use `oneOf([...])` for model-facing string enums. It produces a plain `enum` schema every provider accepts, and `opt(oneOf(...))` stays optional in `Static`.
+- `obj()` is closed (`additionalProperties: false`); pass `{ open: true }` only when extra properties are part of the contract.
+- `default` is an annotation; validation never inserts it, so apply defaults in `execute`.
+- Pi does not provide `@earendil-works/pi-schema` to extensions; list it in `dependencies`.
 
-Pi validates tool arguments as JSON Schema whatever built the schema. TypeBox features outside JSON Schema do not apply to tool arguments: `Type.Refine()` refinements are not run (check such constraints in `execute`), `Type.BigInt()`, `Type.Undefined()`, and `Type.Void()` reject every argument, codecs do not decode, and `Format.Set()` formats are not checked. Keep parameter schemas plain JSON Schema.
-
-`StringEnum` is a TypeBox `TUnsafe`. On pi >= 1.5.0, `Type.Optional(StringEnum(...))` loses its optionality in `Static` inference, so enum params typed that way become required. Keep enum params required, or verify the inferred params type after a pi upgrade.
+Before validation, Pi coerces loosely typed arguments: numeric strings to numbers, `"true"` to `true`, a single value to a one-item array, and `null` in an optional property dropped. Keep constraints expressible in JSON Schema and check anything else in `execute`.
 
 ## Prompt Metadata
 
@@ -267,8 +271,13 @@ Custom renderers return TUI `Component` objects.
 
 Use `ToolCallHeader` for a stable, scannable call line.
 
+`renderCall` runs while the call streams, so its arguments can be partial and are typed `unknown`. Compile the parameter schema once and narrow with `check()`, falling back to a generic header:
+
 ```typescript
+const repoTreeParams = compile(parameters);
+
 renderCall(args, theme) {
+  if (!repoTreeParams.check(args)) return new ToolCallHeader({ toolName: "Repo Tree" }, theme);
   return new ToolCallHeader(
     {
       toolName: "Repo Tree",
@@ -434,7 +443,8 @@ async execute(_toolCallId, params, signal, onUpdate, ctx): Promise<AgentToolResu
 ## Checklist
 
 - [ ] Tool uses `defineTool({...})` with no explicit generic args.
-- [ ] Params infer from `parameters`; helper APIs use `Static<typeof parameters>` alias.
+- [ ] `parameters` is built with `@earendil-works/pi-schema`, listed in `dependencies`.
+- [ ] `execute` annotates `params` with the pi-schema `Static<typeof parameters>` alias; `renderCall` narrows `args` with a compiled `check()`.
 - [ ] `label`, `description`, and useful parameter descriptions are present.
 - [ ] `promptGuidelines` bullets name the exact tool.
 - [ ] Execute signature is `(toolCallId, params, signal, onUpdate, ctx)`.

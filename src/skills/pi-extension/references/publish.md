@@ -19,18 +19,19 @@ A publishable package needs Pi metadata and discoverability fields.
   "pi": {
     "extensions": ["./extensions/my-domain/index.ts", "./extensions/feature-a/index.ts"]
   },
+  "dependencies": {
+    "@earendil-works/pi-schema": "^CURRENT_VERSION"
+  },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
+    "@earendil-works/pi-coding-agent": "*"
   },
   "peerDependenciesMeta": {
-    "@earendil-works/pi-coding-agent": { "optional": true },
-    "typebox": { "optional": true }
+    "@earendil-works/pi-coding-agent": { "optional": true }
   }
 }
 ```
 
-Pi core packages imported at runtime belong in optional `peerDependencies`. Use `"*"` by default. Only use a minimum range such as `">=0.75.0"` when code requires an API introduced after Pi 0.74.0, and set the minimum to the introducing version. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages belong in `dependencies`.
+Pi core packages imported at runtime belong in optional `peerDependencies`. Use `"*"` by default. Only use a minimum range such as `">=0.75.0"` when code requires an API introduced after Pi 0.74.0, and set the minimum to the introducing version. Keep exact target versions in `devDependencies` for local type checking. Third-party runtime packages, including `@earendil-works/pi-schema` for tool parameter schemas, belong in `dependencies`.
 
 The `files` array must include the `src` and `extensions` directories, `schema.json`, and `CHANGELOG.md`. npm adds `README.md` on its own but not `CHANGELOG.md`, so without the entry Pi has no update notes to show.
 
