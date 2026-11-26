@@ -29,6 +29,7 @@ npm-debug.log*
 pnpm-debug.log*
 
 # Nix
+.pre-commit-config.yaml
 .direnv/
 result
 result-*
