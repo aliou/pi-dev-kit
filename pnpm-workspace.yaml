@@ -1,6 +1,6 @@
 catalog:
-  "@earendil-works/pi-ai": 0.79.1
-  "@earendil-works/pi-tui": 0.79.1
+  "@earendil-works/pi-ai": 1.6.1
+  "@earendil-works/pi-tui": 1.6.1
 
 overrides:
   "@earendil-works/pi-ai": "catalog:"
@@ -9,3 +9,6 @@ overrides:
 allowBuilds:
   "@google/genai": false
   protobufjs: false
+
+minimumReleaseAgeExclude:
+  - '@aliou/pi-utils-ui@0.6.1'
