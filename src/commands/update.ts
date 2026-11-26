@@ -103,6 +103,7 @@ For rendering and TUI, verify:
 
 For extension APIs, verify:
 - Hook return shapes match current Pi docs: \`input\` returns \`{ action: "continue" | "transform" | "handled", ... }\`; \`before_agent_start\` returns \`{ systemPrompt }\`; \`tool_result\` returns result patches.
+- Behavior that runs when the agent is about to stop uses \`agent_before_settle\`, not \`agent_end\` (which can be followed by retries, compaction, or queued messages) or \`turn_end\`; it skips incomplete or already-continuing runs and caps \`continue: true\`. Status integrations that need idle use \`agent_settled\`.
 - Session replacement uses \`withSession\` after \`ctx.newSession()\`, \`ctx.fork()\`, or \`ctx.switchSession()\`; do not reuse captured old \`pi\`, command \`ctx\`, or \`ctx.sessionManager\`.
 - Reload command handlers treat \`await ctx.reload(); return;\` as terminal.
 - Deferred work (timers, socket callbacks, un-awaited promises) does not touch \`pi\` or \`ctx\` after \`session_shutdown\`: after a reload or session replacement every getter and \`pi\` action, including \`pi.events.emit()\`, throws a stale-context error, and Pi has no \`unhandledRejection\` handler to catch it. Close long-lived resources in \`session_shutdown\`, guard continuations with a flag set there, and drop stale-context errors in fire-and-forget \`catch\` handlers.

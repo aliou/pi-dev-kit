@@ -15,23 +15,26 @@ Handlers run in extension load order. For blocking/cancelling events, the first 
 
 Common startup and prompt flow:
 
-1. `session_start`
-2. `resources_discover`
-3. user input arrives
-4. extension command check
-5. `input`
-6. skill/prompt expansion
-7. `before_agent_start`
-8. `agent_start`
-9. repeated turns:
+1. `project_trust` when the project needs a trust decision
+2. `session_start`
+3. `resources_discover`
+4. user input arrives
+5. extension command check
+6. `input`
+7. skill/prompt expansion
+8. `before_agent_start`
+9. `agent_start`
+10. repeated turns:
    - `turn_start`
    - `context`
    - `before_provider_request`
    - `after_provider_response`
    - message/tool lifecycle events
    - `turn_end`
-10. `agent_end`
-11. `session_shutdown` on exit, reload, or session replacement
+11. `agent_end`, possibly followed by retries, compaction, or queued messages
+12. `agent_before_settle`
+13. `agent_settled`
+14. `session_shutdown` on exit, reload, or session replacement
 
 Read Pi `docs/extensions.md` for the exhaustive event diagram before changing lifecycle-heavy code.
 
@@ -83,7 +86,9 @@ pi.on("session_before_switch", async (event, ctx) => {
 | Event | Purpose |
 |---|---|
 | `before_agent_start` | Inject a message or replace the system prompt for this turn. |
-| `agent_start` / `agent_end` | Whole prompt lifecycle. |
+| `agent_start` / `agent_end` | One low-level run. `agent_end` is not final: retries, compaction, or queued messages can follow. |
+| `agent_before_settle` | Final actionable boundary: append entries and request one continuation. |
+| `agent_settled` | Pi will not continue on its own. Notification only. |
 | `turn_start` / `turn_end` | One provider response plus tool batch. |
 | `context` | Modify copied messages before a provider call. |
 | `message_start` / `message_update` / `message_end` | Observe or replace messages. |
@@ -126,6 +131,40 @@ pi.on("message_end", async (event) => {
   };
 });
 ```
+
+### `agent_before_settle`
+
+Use `agent_before_settle`, not `turn_end` or `agent_end`, to act when the agent is about to stop: `turn_end` fires after every tool batch, and `agent_end` can be followed by retries, compaction, or queued messages. Read the conversation from `event.context.contextMessages`. Return the full proposal: earlier handlers' entries plus yours, and `continue: true` to run once more.
+
+```typescript
+let nudges = 0;
+
+pi.on("input", () => {
+  nudges = 0;
+});
+
+pi.on("agent_before_settle", async (event) => {
+  if (event.outcome !== "completed" || event.continue) return;
+  if (nudges >= 1 || !needsNudge(event.context.contextMessages)) return;
+  nudges += 1;
+  return {
+    entries: [
+      ...event.entries,
+      { type: "custom_message", customType: "my-domain:nudge", content: "Finish the remaining work.", display: false },
+    ],
+    continue: true,
+  };
+});
+```
+
+- Skip runs that did not complete or already have a pending continuation.
+- Cap continuations per user request. Each continuation ends in another `agent_before_settle`, so an unconditional `continue: true` loops.
+- Send the instruction as a hidden custom message instead of invoking a slash command programmatically.
+- Use `agent_settled` for status integrations that need to know Pi is idle.
+
+## Project Trust
+
+`project_trust` runs before trusted project resources load, and again when a session replacement enters a new working directory. Only user/global or CLI extensions should answer it, by returning `{ trusted: "yes" | "no" | "undecided" }`. Package extensions that read project-local config check `ctx.isProjectTrusted()` in handlers instead; see `references/structure.md` for `bindProjectConfig()`.
 
 ## Tool Events
 
@@ -319,4 +358,5 @@ Read `references/modes.md` before adding UI to hooks.
 - [ ] `before_agent_start` returns `{ systemPrompt }`; it does not call `ctx.setSystemPrompt()`.
 - [ ] Nested async work uses `ctx.signal` when available.
 - [ ] Session replacement cleanup/rebuild is split between `session_shutdown` and `session_start`.
+- [ ] Stop-time behavior uses `agent_before_settle`, skips incomplete or already-continuing runs, and caps continuations.
 - [ ] Built-in tool overrides re-declare prompt metadata if needed.

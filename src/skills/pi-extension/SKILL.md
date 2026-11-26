@@ -76,7 +76,7 @@ If using the legacy namespace, replace `@earendil-works/*` with the matching `@m
 | `references/structure.md` | Multi-extension layout, package.json, pnpm-workspace.yaml, tsconfig, Biome config, config split, event bus, entry points, API-key pattern. |
 | `references/tools.md` | `defineTool`, schemas, execute signature, prompt metadata, rendering, truncation, concurrency. |
 | `references/commands.md` | Slash commands, argument completion, session methods, rich UI fallback. |
-| `references/hooks.md` | Event lifecycle, blocking/cancelling, input transforms, system prompt hooks, bash hooks. |
+| `references/hooks.md` | Event lifecycle, blocking/cancelling, input transforms, settle boundary, project trust, system prompt hooks, bash hooks. |
 | `references/components.md` | Pi TUI component interface, built-ins, custom UI, overlays, key handling. |
 | `references/providers.md` | `pi.registerProvider(name, config)`, OAuth, streaming, model metadata. |
 | `references/modes.md` | Interactive/RPC/JSON/Print behavior and fallback patterns. |
