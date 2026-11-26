@@ -71,6 +71,7 @@ Renderer rules:
 - If `details` is missing or malformed, fall back to `message.content`.
 - Do not throw from renderers.
 - Keep `details` small and durable; put large human-readable text in `content`.
+- Register each message or entry renderer from exactly one `pi.extensions` entry point, usually the main extension, even when several sub-extensions emit that `customType`. Registering the same type from several entry points is a duplicate registration.
 
 ## Command with Persistent Fallback
 
