@@ -1,5 +1,24 @@
 # @aliou/pi-dev-kit
 
+## 0.9.0
+
+### Minor Changes
+
+- 0d8f9ac: Update Pi dev dependencies to 1.6.1 and `@aliou/pi-utils-ui` to 0.6.1.
+- 083c8c8: Teach `@earendil-works/pi-schema` for tool parameters in the pi-extension skill and update command: build schemas with its builders, list it in `dependencies`, annotate `execute` params with its `Static` type, narrow `renderCall` args with a compiled `check()`, and use `oneOf` for string enums.
+
+### Patch Changes
+
+- 047346e: Update the pi-extension skill and update command for current package tooling: pnpm 11 settings in `pnpm-workspace.yaml` with catalog-backed Pi overrides, `allowBuilds`, and `minimumReleaseAgeExclude`; the shared `@aliou/biome-plugins/configs/pi-coding-agent-extension` Biome config; `CHANGELOG.md` in `files`; and no `catalog:` or `workspace:` versions in a published `package.json`.
+- c4801ae: Teach the pi-extension skill and update command to load project config only after Pi trusts the project: call `bindProjectConfig()` after `configLoader.load()` in every entry point and read config when handlers run.
+- 50a5c6b: Point the pi-extension skill's reference extensions at their public GitHub repositories.
+- 277415d: Update the pi-extension skill and update command for pi 1.6.0 components: lines returned by `render()` are read-only cached arrays that must be copied before modification. Teach `truncateToWidth` from `@aliou/pi-utils-ui` instead of pi-tui's.
+- a12c384: Document the `agent_before_settle`, `agent_settled`, and `project_trust` events in the pi-extension skill and update command: act at stop time from `agent_before_settle`, skip incomplete or already-continuing runs, and cap continuations.
+- 5801a10: Tell the pi-extension skill to register each message or entry renderer from one entry point only, so sub-extensions sharing a custom type do not register it twice.
+- ff02383: Document stale contexts in deferred work in the pi-extension skill and update command: after a reload or session replacement every `ctx` getter and `pi` action throws, and an escaping error from a timer, socket callback, or un-awaited promise kills Pi. Close long-lived resources in `session_shutdown`, guard continuations with a flag, and drop stale-context errors.
+- 4b74c2e: Extend the pi-extension testing guidance: smoke-load one entry point with `pi -ne -e <entry> --no-session -p`, test stale-context regressions through Pi's real `ExtensionRunner`, and find load errors in the chat or on stderr.
+- 4947235: Define tool parameters with `@earendil-works/pi-schema` instead of TypeBox and drop the `typebox` peer dependency.
+
 ## 0.8.1
 
 ### Patch Changes
